@@ -1,0 +1,1831 @@
+{
+  "scan_summary": {
+    "total_files_scanned": 101,
+    "files_with_issues": 45,
+    "total_vulnerabilities": 206,
+    "scan_time": "2026-04-13T11:13:12.210265"
+  },
+  "vulnerabilities_by_severity": {
+    "critical": 1,
+    "high": 160,
+    "medium": 43,
+    "low": 2
+  },
+  "vulnerabilities_by_type": {
+    "code_injection": 3,
+    "dependency_vulnerability": 1,
+    "path_traversal": 2,
+    "insecure_temporary_file": 1,
+    "ssrf": 1,
+    "command_injection": 5,
+    "sensitive_data_exposure": 4,
+    "hardcoded_credentials": 4,
+    "insecure_tls_configuration": 1,
+    "weak_cipher_configuration": 1,
+    "missing_security_headers": 2,
+    "open_redirect": 2,
+    "csrf_bypass": 1,
+    "type_confusion": 1,
+    "information_disclosure": 27,
+    "insecure_direct_object_reference": 6,
+    "regex_denial_of_service": 1,
+    "unrestricted_rendering": 1,
+    "unsafe_deserialization": 1,
+    "stored_xss": 1,
+    "sql_injection": 29,
+    "csrf": 2,
+    "logic_error": 1,
+    "plaintext_password_exposure": 2,
+    "cross_site_scripting": 36,
+    "missing_authentication": 6,
+    "broken_access_control": 4,
+    "insecure_password_storage": 2,
+    "insecure_data_storage": 1,
+    "race_condition": 1,
+    "weak_hashing": 2,
+    "session_fixation": 2,
+    "open_redirect_header_injection": 1,
+    "weak_password": 1,
+    "session_misconfiguration": 5,
+    "xss": 5,
+    "session_management": 2,
+    "missing_csrf_protection": 8,
+    "insecure_form_submission": 3,
+    "missing_input_validation": 7,
+    "potential_xss_via_form_processing": 1,
+    "header_injection": 2,
+    "weak_cryptography": 3,
+    "insecure_transport": 2,
+    "credential_exposure": 2,
+    "brute_force": 1,
+    "autocomplete_sensitive_data": 1,
+    "missing_access_control": 1,
+    "insecure_http_method": 1,
+    "mixed_content": 1,
+    "missing_autocomplete_attribute": 1,
+    "missing_authentication_authorization": 1,
+    "insecure_direct_object_reference / privilege_escalation": 1,
+    "insufficient_password_policy": 1,
+    "missing_transport_security": 1
+  },
+  "file_details": [
+    {
+      "file": "setup.py",
+      "line_count": 75,
+      "vulnerabilities": [
+        {
+          "line": 7,
+          "type": "code_injection",
+          "severity": "high",
+          "description": "The use of `exec()` to execute the contents of an external file ('odoo/release.py') is a code injection risk. If an attacker can modify the 'odoo/release.py' file (e.g., via a supply-chain attack, compromised repository, or symlink attack), arbitrary Python code will be executed with the privileges of the user running `setup.py`. The `exec()` call reads the file and executes its entire contents in the current scope with no sandboxing or validation.",
+          "suggestion": "Avoid using `exec()` to load variables from external files. Instead, parse the file safely using `ast.literal_eval()` for individual values, use `importlib` to import the module, or define version/metadata directly in `setup.cfg` or `pyproject.toml`. For example: `import importlib.util; spec = importlib.util.spec_from_file_location('release', ...); mod = importlib.util.module_from_spec(spec); spec.loader.exec_module(mod)` — which at least provides module-level isolation."
+        },
+        {
+          "line": 26,
+          "type": "dependency_vulnerability",
+          "severity": "medium",
+          "description": "Multiple dependencies are specified without pinned versions or upper-bound constraints (e.g., 'werkzeug', 'Jinja2', 'requests', 'lxml', 'cryptography', 'pillow', 'PyPDF2', etc.). This makes the project susceptible to dependency confusion attacks and the inadvertent installation of vulnerable or malicious package versions. While not a direct code vulnerability in this file, it is a significant supply-chain security concern.",
+          "suggestion": "Pin dependencies to specific known-good versions or at minimum specify upper-bound version constraints (e.g., 'werkzeug>=2.0,<3.0'). Use a lock file mechanism (pip-tools, poetry.lock) to ensure reproducible and auditable builds. Consider using hash-checking mode for pip installations."
+        }
+      ],
+      "summary": "The primary high-confidence security issue is the use of `exec()` on line 7 to execute the contents of an external file, which constitutes an arbitrary code execution risk if the referenced file is tampered with. A secondary concern is the lack of version pinning on most dependencies, which increases exposure to supply-chain attacks. The rest of the file follows standard setuptools patterns without additional vulnerabilities."
+    },
+    {
+      "file": "setup/requirements-check.py",
+      "line_count": 404,
+      "vulnerabilities": [
+        {
+          "line": 79,
+          "type": "path_traversal",
+          "severity": "high",
+          "description": "The urlopen() caching function constructs file paths in /tmp/package_versions_cache/ using a sanitized but predictable transformation of URLs. While alphanumeric characters are preserved and others replaced with underscores, the cache directory in /tmp is world-writable. An attacker could pre-create the cache directory or cache files (symlink attack / TOCTOU race condition) to serve poisoned data. The os.path.isfile() check followed by open() is not atomic, allowing a race condition where an attacker replaces the file between the check and the read.",
+          "suggestion": "Use tempfile.mkdtemp() or a user-specific cache directory (e.g., under ~/.cache/) with proper permissions instead of a predictable /tmp path. Use os.open() with O_CREAT|O_EXCL flags for atomic file creation, or use a proper caching library."
+        },
+        {
+          "line": 78,
+          "type": "insecure_temporary_file",
+          "severity": "high",
+          "description": "The cache directory /tmp/package_versions_cache/ is created with os.makedirs() using default permissions (world-readable/writable on most systems). Any local user can write to this shared directory, injecting malicious cached responses that would be trusted by subsequent runs of this script. This is a cache poisoning vulnerability that could lead to supply chain attacks if the cached PyPI or distribution package data is tampered with.",
+          "suggestion": "Use a per-user cache directory (e.g., os.path.join(os.environ.get('XDG_CACHE_HOME', os.path.expanduser('~/.cache')), 'package_versions_cache')) and set restrictive permissions (mode=0o700) on directory creation."
+        },
+        {
+          "line": 76,
+          "type": "ssrf",
+          "severity": "high",
+          "description": "The urlopen() wrapper function accepts arbitrary URLs and fetches them with no allowlist or validation. While the direct callers use hardcoded URL patterns, the function is a general wrapper around urllib's urlopen. In the PipPackage class (line 97), user-influenced package names from requirements.txt are interpolated into URLs (f'https://pypi.org/pypi/{name}/json'), and in Distribution subclasses, package names are similarly used. A maliciously crafted requirements.txt with specially crafted package names could potentially cause requests to unintended hosts if the URL construction is abused.",
+          "suggestion": "Validate and sanitize the package name before URL construction. Restrict the urlopen wrapper to only allow requests to known-good domains (pypi.org, sources.debian.org, packages.ubuntu.com). Use urllib.parse.quote() on interpolated values."
+        }
+      ],
+      "summary": "The file contains several security concerns centered around its URL caching mechanism. The most critical issues are: (1) use of a predictable, world-writable /tmp directory for caching HTTP responses, creating cache poisoning and symlink/TOCTOU attack vectors; (2) insufficient input validation on package names used in URL construction, creating potential SSRF risks. These vulnerabilities are particularly concerning in a supply-chain context since this script checks package versions and could influence dependency decisions."
+    },
+    {
+      "file": "setup/debinstall.sh",
+      "line_count": 27,
+      "vulnerabilities": [
+        {
+          "line": 27,
+          "type": "command_injection",
+          "severity": "high",
+          "description": "The variable `$cmd` is constructed from string concatenation and then passed to `xargs` without quoting (i.e., `xargs $cmd`). Because `$cmd` is unquoted, it undergoes word splitting and globbing. While the values assigned to `$cmd` in this particular script are controlled, the unquoted expansion combined with `xargs` means any unexpected content in `$cmd` (e.g., via future modification or sourcing) could lead to arbitrary command execution. More critically, the output of `sed` and `awk` processing the `debian/control` file is piped directly into `xargs $cmd`. If the `debian/control` file is attacker-controlled or tampered with (e.g., via a supply-chain attack on the repository), malicious package names or shell metacharacters parsed out of that file could be injected into the `xargs` invocation. While `xargs` does not invoke a shell by default, crafted package-name-like strings could cause `apt-get` to install attacker-chosen packages.",
+          "suggestion": "Quote `$cmd` properly or, better yet, avoid constructing a command string from concatenation. Use a function or an array to build the command safely. Validate or whitelist the package names extracted from debian/control before passing them to xargs. For example: `xargs -r -- $cmd` (with the `--` to prevent option injection), and validate that each extracted package name matches a strict regex like `^[a-z0-9][a-z0-9.+\\-]+$`."
+        },
+        {
+          "line": 23,
+          "type": "path_traversal",
+          "severity": "medium",
+          "description": "The `control_path` is derived via `realpath` from a relative path (`$script_dir/../debian/control`). If a symlink or directory structure is manipulated (e.g., the script is invoked in a context where `$0` or the directory structure is attacker-influenced), `realpath` could resolve to an unintended file. The contents of that file are then parsed and fed as package names to `apt-get install`, potentially causing installation of arbitrary packages.",
+          "suggestion": "Validate that the resolved `control_path` points to the expected location within the known repository tree. Check that it is a regular file (not a symlink to an unexpected location) and that it resides under the expected parent directory."
+        }
+      ],
+      "summary": "The script has a moderate-to-high risk command injection surface: it constructs a command string via concatenation, parses an external file (debian/control) for package names, and pipes the result into an unquoted `xargs $cmd` invocation. If the debian/control file is tampered with (supply-chain attack) or the script path is manipulated, an attacker could influence which packages are installed or potentially inject unexpected arguments. The most impactful fix is to validate extracted package names against a strict allowlist/regex and to properly quote or restructure the command invocation."
+    },
+    {
+      "file": "setup/package.py",
+      "line_count": 339,
+      "vulnerabilities": [
+        {
+          "line": 29,
+          "type": "code_injection",
+          "severity": "high",
+          "description": "The exec() call reads and executes the contents of 'odoo/release.py' in the current module's global scope. If an attacker can modify the release.py file (e.g., via supply chain attack, compromised repository, or symlink manipulation), arbitrary Python code will be executed with the privileges of the packaging script, which often runs as root or with elevated CI/CD permissions.",
+          "suggestion": "Instead of using exec() to load variables from release.py, parse the file safely (e.g., using ast.literal_eval for specific values, or importlib to import it as a proper module). At minimum, validate the file's integrity via a checksum or signature before execution."
+        },
+        {
+          "line": 137,
+          "type": "command_injection",
+          "severity": "high",
+          "description": "In gen_deb_package(), when args.sign is true, GPGPASSPHRASE is passed directly as a command-line argument to subprocess.call(['gpg', '--passphrase', GPGPASSPHRASE, ...]). This exposes the passphrase in the process list (visible via `ps aux`) to all users on the system. Additionally, if GPGPASSPHRASE contains shell metacharacters, it could cause unexpected behavior.",
+          "suggestion": "Pass the passphrase via stdin using subprocess.Popen with stdin=PIPE, or use the --passphrase-fd option to read from a file descriptor. Avoid passing secrets as command-line arguments."
+        },
+        {
+          "line": 148,
+          "type": "command_injection",
+          "severity": "high",
+          "description": "In rpm_sign(), the file_name variable is interpolated directly into a shell command string passed to pexpect.spawn('/bin/bash', ['-c', 'rpm --resign %s' % file_name]). If file_name contains shell metacharacters or malicious content (e.g., from a crafted filename), arbitrary commands could be executed.",
+          "suggestion": "Use shlex.quote() to escape file_name before interpolation, or avoid using shell interpretation entirely by passing the command as a list without '-c' and shell string interpolation."
+        },
+        {
+          "line": 149,
+          "type": "sensitive_data_exposure",
+          "severity": "high",
+          "description": "In rpm_sign(), GPGPASSPHRASE is sent over pexpect to the rpm --resign process. Combined with the process being spawned via bash -c, the passphrase is exposed in the process table. Additionally, if GPGPASSPHRASE is None (env var not set), this will crash or send 'None' as the passphrase.",
+          "suggestion": "Validate that GPGPASSPHRASE is set before use. Consider using gpg-agent or a more secure mechanism for passphrase handling that doesn't expose secrets in process arguments or interactive input."
+        },
+        {
+          "line": 64,
+          "type": "hardcoded_credentials",
+          "severity": "high",
+          "description": "The _rpc_count_modules() function uses hardcoded credentials ('admin'/'admin') for XML-RPC authentication against the Odoo instance. While this is in a test context, if this code is reused or the test instance is accessible on the network, it presents a significant risk. The function also communicates over unencrypted HTTP by default.",
+          "suggestion": "Use environment variables or a secure configuration file for credentials, even in test scenarios. Ensure the test instance is bound only to localhost (which appears to be the default) and consider using HTTPS."
+        },
+        {
+          "line": 196,
+          "type": "command_injection",
+          "severity": "high",
+          "description": "In Docker.run(), the cmd parameter is interpolated into a shell command string ('cd /data/src && %s' % cmd) and passed to '/bin/bash -c'. Multiple callers construct cmd by joining user-influenced strings. If any part of the command contains unsanitized input, this enables command injection within the Docker container.",
+          "suggestion": "Sanitize or validate all inputs used to construct shell commands. Where possible, avoid shell interpretation by using list-based command execution. Use shlex.quote() for any variable interpolated into shell command strings."
+        }
+      ],
+      "summary": "This build/packaging script contains several high-severity security issues: (1) exec() is used to load code from a file, enabling code injection if that file is compromised; (2) GPG passphrases are exposed via command-line arguments visible in process listings; (3) shell command injection is possible in rpm_sign() due to unsanitized filename interpolation in a bash -c command; (4) hardcoded admin credentials are used for XML-RPC authentication; (5) Docker commands are constructed via string interpolation into shell commands. The script appears to be a CI/CD build tool that typically runs with elevated privileges, making these vulnerabilities particularly impactful."
+    },
+    {
+      "file": "doc/cla/stats.py",
+      "line_count": 59,
+      "vulnerabilities": [
+        {
+          "line": 30,
+          "type": "command_injection",
+          "severity": "high",
+          "description": "The `blamestat` function passes the `ext` parameter directly into a shell command string via string formatting (`% ext`) and executes it with `shell=True` in `subprocess.Popen`. While the function is currently called with hardcoded string literals at the bottom of the file, the function itself is publicly callable. If any future code or caller passes user-controlled input as the `ext` argument, an attacker could inject arbitrary shell commands (e.g., `ext=\"py; rm -rf /\"`).",
+          "suggestion": "Avoid using `shell=True` with string interpolation. Instead, break the pipeline into separate subprocess calls or use `subprocess.run` with a list of arguments. Validate/sanitize the `ext` parameter to ensure it only contains expected alphanumeric file extension characters (e.g., `if not re.match(r'^[a-zA-Z0-9]+$', ext): raise ValueError(...)`)."
+        }
+      ],
+      "summary": "The file contains one high-confidence command injection vulnerability in the `blamestat` function, where the `ext` parameter is interpolated into a shell command executed via `subprocess.Popen` with `shell=True`. Although current invocations use hardcoded literals, the function's interface is inherently unsafe and poses a risk if reused or called with untrusted input. No other high-confidence vulnerabilities (e.g., SQL injection, path traversal with direct exploit potential) were identified. The `glob.glob` and `open()` usage on line 13 uses a hardcoded pattern, limiting practical exploitation."
+    },
+    {
+      "file": "setup/win32/conf/nginx/nginx.conf",
+      "line_count": 19,
+      "vulnerabilities": [
+        {
+          "line": 13,
+          "type": "insecure_tls_configuration",
+          "severity": "high",
+          "description": "The ssl_protocols directive enables TLSv1 and TLSv1.1, which are deprecated and known to be vulnerable to attacks such as BEAST, POODLE, and other cryptographic weaknesses. TLSv1 was deprecated by RFC 8996 in March 2021, and TLSv1.1 was deprecated at the same time. Major browsers and security standards (PCI DSS) no longer support these protocols.",
+          "suggestion": "Restrict ssl_protocols to only TLSv1.2 and TLSv1.3: `ssl_protocols TLSv1.2 TLSv1.3;`"
+        },
+        {
+          "line": 14,
+          "type": "weak_cipher_configuration",
+          "severity": "high",
+          "description": "The cipher suite 'HIGH:!aNULL:!MD5' is overly broad and may include weak or vulnerable ciphers such as those using CBC mode (vulnerable to Lucky13), RC4, or lacking forward secrecy. It does not explicitly exclude export-grade ciphers, DES, 3DES, or enforce ECDHE/DHE for perfect forward secrecy.",
+          "suggestion": "Use a more restrictive and modern cipher string, for example: `ssl_ciphers ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305;` and add `ssl_prefer_server_ciphers on;`"
+        },
+        {
+          "line": 7,
+          "type": "missing_security_headers",
+          "severity": "high",
+          "description": "The server block is missing critical HTTP security headers: Strict-Transport-Security (HSTS), X-Content-Type-Options, X-Frame-Options, X-XSS-Protection, Content-Security-Policy, and Referrer-Policy. Without HSTS, users are vulnerable to SSL stripping attacks (e.g., via tools like sslstrip) on their first connection.",
+          "suggestion": "Add security headers to the server block, at minimum: `add_header Strict-Transport-Security \"max-age=31536000; includeSubDomains\" always;`, `add_header X-Content-Type-Options nosniff always;`, `add_header X-Frame-Options DENY always;`"
+        }
+      ],
+      "summary": "This nginx configuration contains several high-severity security issues. The most critical are the enablement of deprecated TLS protocols (TLSv1 and TLSv1.1) which are known to be cryptographically weak, an overly permissive cipher suite configuration, the absence of HSTS and other security headers leaving users vulnerable to protocol downgrade and SSL stripping attacks, and missing proxy headers that could lead to security issues in the backend application. The configuration should be hardened by restricting to TLSv1.2+ only, using a modern cipher suite with forward secrecy, adding comprehensive security headers, and properly configuring proxy headers."
+    },
+    {
+      "file": "addons/mass_mailing/controllers/legacy.py",
+      "line_count": 21,
+      "vulnerabilities": [
+        {
+          "line": 17,
+          "type": "open_redirect",
+          "severity": "high",
+          "description": "The `**post` dictionary is passed directly into the URL parameters via `werkzeug.urls.url_encode` and then used in a redirect. An attacker could potentially inject unexpected parameters that influence the behavior of the target `/mailing/{mailing_id}/unsubscribe` endpoint. However, since the redirect target path is fixed (not user-controlled), this is a limited concern. More critically, the `email`, `res_id`, and `token` parameters are taken directly from user input without validation and forwarded, which could facilitate parameter pollution or abuse of the downstream endpoint.",
+          "suggestion": "Validate and sanitize `email`, `res_id`, and `token` parameters before forwarding. Avoid passing `**post` (arbitrary user-supplied parameters) blindly into the redirect URL. Whitelist only expected parameters to prevent parameter injection/pollution."
+        }
+      ],
+      "summary": "The file implements a legacy redirect controller. The primary concern is that arbitrary user-supplied query parameters (`**post`) are forwarded without sanitization into a redirect URL, enabling parameter pollution on the target endpoint. The redirect target path itself is not user-controlled (mitigating full open-redirect risk), but unvalidated pass-through of all POST/GET parameters to the downstream unsubscribe endpoint is a security weakness. No SQL injection, XSS, or other critical vulnerabilities were identified."
+    },
+    {
+      "file": "addons/mass_mailing/controllers/main.py",
+      "line_count": 293,
+      "vulnerabilities": [
+        {
+          "line": 101,
+          "type": "csrf_bypass",
+          "severity": "high",
+          "description": "The route '/mailing/<int:mailing_id>/unsubscribe_oneclick' has CSRF protection explicitly disabled (csrf=False). While the comment states this is because MUAs may call it with unpredictable sessions, this allows any external website to craft a POST request that unsubscribes a user from a mailing list without their consent. An attacker can create a page with a hidden form that auto-submits to this endpoint with a victim's email and valid hash_token (if leaked or guessed) to perform unauthorized unsubscriptions.",
+          "suggestion": "Instead of fully disabling CSRF, implement an alternative verification mechanism. The hash_token parameter provides some protection, but ensure it is always validated strictly. Consider adding rate limiting and requiring the hash_token to be mandatory (not optional via document_id/email being None). Evaluate if List-Unsubscribe-Post RFC 8058 compliance truly requires disabling CSRF or if alternative protections can be applied."
+        },
+        {
+          "line": 156,
+          "type": "open_redirect",
+          "severity": "high",
+          "description": "In mailing_confirm_unsubscribe_post, user-controlled parameters 'email', 'document_id', and 'hash_token' are directly interpolated into a URL via urllib.parse.urlencode and then rendered into an HTML template as an href attribute. While urlencode provides some encoding, the 'email' and 'hash_token' values come directly from the POST request without sanitization. If an attacker controls these values, they could potentially inject malicious content into the rendered page context. More critically, since document_id is passed without int() conversion to urlencode, and the resulting URL is used in an anchor tag, this could facilitate parameter injection attacks.",
+          "suggestion": "Validate and sanitize all user inputs before including them in URLs. Cast document_id to int, validate email format, and ensure hash_token contains only expected characters (e.g., alphanumeric). Use werkzeug's url_quote or similar safe URL construction methods."
+        },
+        {
+          "line": 148,
+          "type": "type_confusion",
+          "severity": "high",
+          "description": "In mailing_confirm_unsubscribe_post, 'mailing_id' arrives as a string from the POST form but is cast with int() inline. However, 'document_id' is never cast to int and is passed as a string to _mailing_unsubscribe_from_list and _mailing_unsubscribe_from_document, as well as to _check_mailing_email_token. If document_id is used internally in ORM browse() operations or token comparisons without proper type validation, this could lead to unexpected behavior or authorization bypass if a crafted document_id value causes the token comparison to succeed incorrectly or the browse to target an unintended record.",
+          "suggestion": "Explicitly validate and cast document_id to int at the controller level before passing it to internal methods. Add validation: document_id = int(document_id) if document_id else None, with appropriate error handling for non-integer values."
+        },
+        {
+          "line": 97,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "The mailing_confirm_unsubscribe GET endpoint (line 97) fetches a mailing by ID and, if it's a mailing.contact type, renders the names of public mailing lists in the confirmation page. When email and hash_token are not provided and the user is logged in, no hash_token verification occurs (via _fetch_user_information returning None for hash_token). A logged-in user (even with minimal privileges) can enumerate mailing IDs and discover the names of all public mailing lists associated with any mailing, potentially leaking business-sensitive information about marketing campaigns.",
+          "suggestion": "Ensure that even logged-in users can only see mailing list information for mailings they are associated with, or require the mass_mailing user group for accessing arbitrary mailing details. Add authorization checks beyond just existence verification."
+        }
+      ],
+      "summary": "The file implements mailing subscription management controllers with several security concerns. The most notable is the explicit CSRF disablement on the one-click unsubscribe endpoint, which could allow cross-site unsubscription attacks. There are also concerns around insufficient input validation on document_id (type confusion), potential information disclosure through mailing list enumeration by authenticated users, and user-controlled data being embedded in URLs without adequate sanitization. The token-based authentication mechanism (_check_mailing_email_token) is generally well-designed with constant-time comparison, but the multiple code paths with varying levels of authentication requirements create a complex attack surface."
+    },
+    {
+      "file": "addons/mass_mailing/models/mailing_trace.py",
+      "line_count": 187,
+      "vulnerabilities": [
+        {
+          "line": 123,
+          "type": "insecure_direct_object_reference",
+          "severity": "high",
+          "description": "The `action_view_contact` method returns an action that navigates to a record based on `self.model` and `self.res_id` without validating that the `model` field contains a legitimate/allowed model name. Since `model` is a free-text `Char` field (not a constrained selection), a user who can create or modify mailing traces could set `model` to any Odoo model (e.g., 'res.users', 'ir.config_parameter', 'ir.rule'), potentially gaining access to view sensitive records they should not be able to access through the standard UI. The returned `ir.actions.act_window` action will open any model's form view with the specified `res_id`.",
+          "suggestion": "Validate that `self.model` is within an allowed list of models (e.g., mailing-related contact models like 'res.partner', 'mailing.contact', 'mailing.list'). Additionally, verify that the current user has read access to the target model and record before returning the action. Example: add a check like `if self.model not in self._get_allowed_models(): raise UserError(...)` or use `self.env[self.model].check_access_rights('read')` and `check_access_rule` before returning the action."
+        }
+      ],
+      "summary": "The file is an Odoo ORM model with mostly standard patterns. One notable issue is an Insecure Direct Object Reference (IDOR) in `action_view_contact()`, where the `model` Char field is used unchecked to construct a navigation action, potentially allowing access to arbitrary model records. The rest of the code uses the ORM safely (no raw SQL, no unsanitized inputs in queries). The `set_*` methods accept domain parameters which are used with `self.search()`, but these are typically called server-side and are protected by Odoo's access control layer."
+    },
+    {
+      "file": "addons/mass_mailing/models/mailing.py",
+      "line_count": 274,
+      "vulnerabilities": [
+        {
+          "line": 27,
+          "type": "regex_denial_of_service",
+          "severity": "medium",
+          "description": "The mso_re regex pattern `\\[if mso\\]>[\\s\\S]*<!\\[endif\\]` uses `[\\s\\S]*` which is a greedy match-all pattern. On specially crafted input with multiple `[if mso]>` openers but no matching `<![endif]`, this could lead to excessive backtracking. However, in practice this specific pattern has limited ReDoS risk since `[\\s\\S]*` matches everything greedily.",
+          "suggestion": "Use a non-greedy quantifier `[\\s\\S]*?` or use `re.DOTALL` flag with `.*?` to reduce potential backtracking."
+        },
+        {
+          "line": 46,
+          "type": "unrestricted_rendering",
+          "severity": "high",
+          "description": "The class sets `_unrestricted_rendering = True` which bypasses Odoo's rendering sandboxing/restrictions. This means the Qweb/inline_template rendering for `body_html` and `preview` fields executes without the usual security constraints, potentially allowing Server-Side Template Injection (SSTI) if a user can control the template content. An attacker with access to modify mailing body content could execute arbitrary Python code through template expressions.",
+          "suggestion": "Remove `_unrestricted_rendering = True` unless absolutely necessary, and ensure that only trusted users with appropriate access rights can modify mailing templates. Apply strict input validation and sandboxing for template content."
+        },
+        {
+          "line": 73,
+          "type": "unsafe_deserialization",
+          "severity": "high",
+          "description": "In `_get_default_mail_server_id()`, `literal_eval()` is used on a value from `ir.config_parameter` (`mass_mailing.mail_server_id`). While `literal_eval` is safer than `eval`, if an attacker gains write access to `ir.config_parameter` (e.g., via SQL injection elsewhere or admin compromise), they could set a malicious value. The `literal_eval` call is wrapped in a try/except ValueError, but `literal_eval` can also raise other exceptions on complex inputs.",
+          "suggestion": "Validate that the parameter value is a simple integer before parsing. Use `int()` instead of `literal_eval()` since the expected value is a simple integer ID."
+        },
+        {
+          "line": 98,
+          "type": "stored_xss",
+          "severity": "medium",
+          "description": "The `body_arch` and `body_html` fields use `sanitize='email_outgoing'` which is a specific sanitization mode for outgoing emails. Depending on the implementation of this sanitization mode, it may not adequately protect against all XSS vectors when the content is rendered in the web interface (as opposed to being sent via email). The `body_html` field uses Qweb rendering with `post_process: True` combined with `_unrestricted_rendering = True`, which could allow injection of malicious content.",
+          "suggestion": "Ensure that `sanitize='email_outgoing'` provides adequate HTML sanitization for web rendering contexts as well. Consider applying additional sanitization when displaying mailing content in the web UI."
+        }
+      ],
+      "summary": "The file contains several security concerns. The most critical is `_unrestricted_rendering = True` which disables template rendering sandboxing, potentially enabling Server-Side Template Injection if an attacker can control template content. There is also use of `literal_eval` on configuration parameters where a simple `int()` cast would suffice, and potential concerns around HTML sanitization modes for mailing body content. The overall risk level depends heavily on the access control enforcement of the Odoo framework around who can create/modify mailing records."
+    },
+    {
+      "file": "addons/mass_mailing/models/mailing_filter.py",
+      "line_count": 35,
+      "vulnerabilities": [
+        {
+          "line": 32,
+          "type": "code_injection",
+          "severity": "high",
+          "description": "The use of `literal_eval` on `mailing_filter.mailing_domain` is relatively safe compared to `eval`, but the domain value is user-controlled and passed directly to `search_count()`. The broader concern is that in some Odoo versions/configurations, crafted domain expressions can be used to access or leak data from unintended models or fields through relational field traversals (e.g., `[('user_ids.password', '!=', False)]`). The bare `except:` clause on line 33 also silently catches all exceptions including `KeyboardInterrupt` and `SystemExit`, which can mask errors and make exploitation harder to detect.",
+          "suggestion": "Validate and sanitize the domain more rigorously before executing it. Use Odoo's `expression.parse()` or domain validation utilities to ensure only allowed fields and operators are referenced. Restrict relational field traversal depth. Replace the bare `except:` with `except Exception:` at minimum, and log the error for auditing purposes."
+        },
+        {
+          "line": 32,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "The `self.env[mailing_filter.mailing_model_id.model]` dynamically accesses any model referenced by `mailing_model_id`. If there are insufficient access controls on which models can be set as `mailing_model_id`, a user could point this to sensitive models (e.g., `res.users`, `ir.config_parameter`) and craft domains that confirm or extract sensitive data through the `search_count()` call (oracle-style data extraction). The validation constraint inadvertently becomes an oracle: if the domain is valid and returns without error, the data exists; if it raises, it doesn't.",
+          "suggestion": "Restrict which models can be assigned to `mailing_model_id` by validating against an allowlist of mailing-compatible models. Add access control checks to ensure users can only reference models they have read access to. Consider performing the domain validation with `sudo=False` and explicit access rights checks."
+        }
+      ],
+      "summary": "The file contains two high-severity concerns related to the domain validation constraint. User-controlled domain strings are evaluated and executed against dynamically-selected models, which can serve as an oracle for data extraction if model selection is not properly restricted. The bare `except:` clause masks all errors, reducing auditability. The core recommendations are to restrict allowable target models, validate domain field references against an allowlist, and improve exception handling."
+    },
+    {
+      "file": "Laundrysystem/delmemberinfo.php",
+      "line_count": 18,
+      "vulnerabilities": [
+        {
+          "line": 4,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The 'userid' parameter from $_GET is directly interpolated into the SQL DELETE query on line 6 without any sanitization, escaping, or use of prepared statements. An attacker can craft a malicious 'userid' value to execute arbitrary SQL commands, potentially deleting all records, extracting data, or compromising the entire database.",
+          "suggestion": "Use prepared statements with parameterized queries. Replace the raw query with: $stmt = $mysqli->prepare('DELETE FROM member WHERE memberId = ?'); $stmt->bind_param('i', $id); $stmt->execute();"
+        },
+        {
+          "line": 4,
+          "type": "insecure_direct_object_reference",
+          "severity": "high",
+          "description": "There is no authentication or authorization check before performing the DELETE operation. Any unauthenticated user who knows or guesses the URL structure can delete any member record by simply providing a 'userid' parameter in the GET request.",
+          "suggestion": "Implement session-based authentication and authorization checks to verify the requesting user has permission to delete the specified member record. Validate that the user is logged in and has admin privileges before allowing deletion."
+        },
+        {
+          "line": 4,
+          "type": "csrf",
+          "severity": "high",
+          "description": "The delete operation is performed via a GET request with no CSRF token validation. An attacker can trick an authenticated admin into clicking a malicious link (e.g., embedded in an image tag or email) that triggers deletion of arbitrary member records without the admin's knowledge or consent.",
+          "suggestion": "Change the delete operation to require a POST request and implement CSRF token validation. Generate a unique token per session, include it as a hidden form field, and verify it server-side before processing the deletion."
+        },
+        {
+          "line": 5,
+          "type": "logic_error",
+          "severity": "medium",
+          "description": "The isset() check on line 5 is performed after the variable is already assigned from $_GET on line 4. If 'userid' is not present in the query string, $id will be null but the isset() check is on $id (which is already set to null), not on $_GET['userid']. This can produce a PHP notice and the logic may not behave as intended.",
+          "suggestion": "Check isset($_GET['userid']) before assigning the variable: if (isset($_GET['userid'])) { $id = $_GET['userid']; ... }"
+        },
+        {
+          "line": 9,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "The $mysqli->error message is echoed directly to the user on line 9. This can reveal internal database structure, table names, column names, and database version information to an attacker, aiding further exploitation.",
+          "suggestion": "Log detailed error messages server-side and display only a generic error message to the user, such as 'An error occurred. Please try again later.'"
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a SQL injection flaw where unsanitized user input from a GET parameter is directly concatenated into a DELETE SQL query, allowing full database compromise. Additionally, there is no authentication, authorization, or CSRF protection, meaning anyone can delete member records by simply visiting a URL. The file also leaks database error details to end users. Immediate remediation with prepared statements, authentication/authorization checks, CSRF protection, and proper error handling is strongly recommended."
+    },
+    {
+      "file": "Laundrysystem/membermanagement.php",
+      "line_count": 125,
+      "vulnerabilities": [
+        {
+          "line": 68,
+          "type": "plaintext_password_exposure",
+          "severity": "high",
+          "description": "Passwords are stored in the database and displayed in plaintext directly on the member management page. The line `<?=$row['password']?>` outputs the raw password value to the HTML page. This indicates passwords are stored without hashing and are exposed to anyone who can access this page.",
+          "suggestion": "Never store passwords in plaintext. Use password_hash() for storage and password_verify() for authentication. Remove the password column from the SELECT query and from the HTML table entirely. Passwords should never be displayed in any admin interface."
+        },
+        {
+          "line": 56,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "When the SQL query fails, the raw database error message is displayed to the user via `$mysqli->error`. This can leak sensitive information about the database schema, table names, and server configuration to an attacker.",
+          "suggestion": "Log detailed error messages server-side using error_log() and display only a generic error message to the user, such as 'An internal error occurred.'"
+        },
+        {
+          "line": 60,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Multiple database values (memberId, firstName, lastName, gender, mobileNo, m_TypeName, bonusPoint, email, memberUserId, password) are output directly into HTML using shorthand `<?= ?>` without any escaping via htmlspecialchars(). If any of these database fields contain malicious scripts (stored XSS), they will execute in the browser of anyone viewing this page.",
+          "suggestion": "Wrap all output in htmlspecialchars() with ENT_QUOTES flag, e.g., `<?=htmlspecialchars($row['firstName'], ENT_QUOTES, 'UTF-8')?>`. Apply this consistently to every variable rendered in HTML."
+        },
+        {
+          "line": 1,
+          "type": "missing_authentication",
+          "severity": "high",
+          "description": "This page displays highly sensitive member data including passwords, personal information, and member IDs, but there is no authentication or authorization check anywhere in the file. Any unauthenticated user can access this page directly by navigating to the URL.",
+          "suggestion": "Implement session-based authentication and verify the user is logged in and has administrator privileges before rendering this page. Redirect unauthorized users to the login page."
+        },
+        {
+          "line": 70,
+          "type": "insecure_direct_object_reference",
+          "severity": "high",
+          "description": "The delete and modify links pass the memberId directly as a GET parameter (`delmemberinfo.php?userid=<?=$row['memberId']?>`). Combined with the lack of authentication and likely lack of CSRF protection on the target pages, an attacker could craft URLs to modify or delete arbitrary member records.",
+          "suggestion": "Implement CSRF tokens for state-changing operations (especially delete). Use POST requests instead of GET for delete operations. Add proper authentication and authorization checks on delmemberinfo.php and modmemberinfo.php."
+        },
+        {
+          "line": 53,
+          "type": "sql_injection",
+          "severity": "medium",
+          "description": "While the current SELECT query is a static string with no user input and is not directly injectable, the query uses implicit join syntax (`FROM member, m_type WHERE memberTypeId = m_TypeId`) and `SELECT *`, which is a risky pattern. If this code is later modified to include user-supplied filters, it will be vulnerable to SQL injection since no prepared statements are used.",
+          "suggestion": "Use prepared statements with parameterized queries as a defensive practice. Replace `SELECT *` with explicit column names. Use explicit JOIN syntax for clarity and safety."
+        }
+      ],
+      "summary": "This file has critical security vulnerabilities. The most severe issue is that user passwords are stored in plaintext and displayed openly on the page. The page lacks any authentication or authorization, meaning anyone can access sensitive member data. All database output is rendered without HTML escaping, creating stored XSS vulnerabilities. Delete/modify operations are performed via unauthenticated GET requests without CSRF protection. Database errors leak internal implementation details. This file requires a comprehensive security overhaul before it can be considered safe for any environment."
+    },
+    {
+      "file": "Laundrysystem/modstaffinfo.php",
+      "line_count": 116,
+      "vulnerabilities": [
+        {
+          "line": 30,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "User-supplied input from $_GET['userid'] is directly concatenated into the SQL query without any sanitization or parameterization. An attacker can manipulate the 'userid' URL parameter to inject arbitrary SQL commands, potentially reading, modifying, or deleting the entire database (e.g., ?userid=1 OR 1=1; DROP TABLE staff;--).",
+          "suggestion": "Use prepared statements with parameterized queries. Replace the vulnerable code with: $stmt = $mysqli->prepare('SELECT * FROM staff WHERE staffId = ?'); $stmt->bind_param('i', $_GET['userid']); $stmt->execute(); $result = $stmt->get_result();"
+        },
+        {
+          "line": 43,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database values from $urow['firstName'] are output directly into HTML input value attributes using the shorthand <?=$urow['firstName']?> without any escaping. If the database contains malicious data (e.g., via second-order XSS from SQL injection or other input points), it will be rendered as executable HTML/JavaScript in the user's browser.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES flag when outputting any data into HTML: value=\"<?=htmlspecialchars($urow['firstName'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 46,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database value $urow['lastName'] is output into an HTML attribute without escaping, vulnerable to stored/reflected XSS.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES: value=\"<?=htmlspecialchars($urow['lastName'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 55,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database value $urow['citizenNo'] is output into an HTML attribute without escaping, vulnerable to stored XSS. Additionally, citizen numbers are sensitive PII being displayed without access control verification.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES and ensure proper authentication/authorization checks before displaying sensitive data."
+        },
+        {
+          "line": 61,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database value $urow['mobileNo'] is output into an HTML attribute without escaping, vulnerable to stored XSS.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES: value=\"<?=htmlspecialchars($urow['mobileNo'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 64,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database value $urow['address'] is output into an HTML attribute without escaping, vulnerable to stored XSS.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES: value=\"<?=htmlspecialchars($urow['address'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 67,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database value $urow['email'] is output into an HTML attribute without escaping, vulnerable to stored XSS.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES: value=\"<?=htmlspecialchars($urow['email'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 33,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL query fails, the raw database error message ($mysqli->error) is displayed to the user. This can reveal database structure, table names, and other sensitive internal information to an attacker.",
+          "suggestion": "Log the detailed error server-side and display a generic error message to the user: error_log('DB error: ' . $mysqli->error); echo 'An error occurred. Please try again later.';"
+        },
+        {
+          "line": 29,
+          "type": "broken_access_control",
+          "severity": "high",
+          "description": "There is no authentication or authorization check before allowing access to staff modification functionality. Any unauthenticated user can access and view sensitive staff information (including citizen numbers, addresses, personal details) by simply visiting the URL with any userid parameter, constituting an Insecure Direct Object Reference (IDOR) vulnerability.",
+          "suggestion": "Implement session-based authentication checks at the top of the page. Verify the logged-in user has permission to view/modify the requested staff record before processing the request."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is an SQL injection on line 30 where user input is directly concatenated into a query. Multiple stored/reflected XSS vulnerabilities exist due to unescaped database output in HTML attributes. There is a complete lack of authentication and authorization, allowing any user to access and modify any staff member's sensitive personal information (IDOR). Database error messages are leaked to end users. Immediate remediation is required: use prepared statements, escape all output with htmlspecialchars(), implement proper session-based access controls, and suppress detailed error messages."
+    },
+    {
+      "file": "Laundrysystem/bbn.sql",
+      "line_count": 323,
+      "vulnerabilities": [
+        {
+          "line": 113,
+          "type": "insecure_password_storage",
+          "severity": "high",
+          "description": "Passwords in the 'member' table are stored as unsalted MD5 hashes (e.g., '7e58d63b60197ceb55a1c487989a3720' is an MD5 hash). MD5 is cryptographically broken and susceptible to rainbow table attacks, brute-force attacks, and collision attacks. The password column is also limited to varchar(45), which cannot accommodate modern secure hash outputs like bcrypt.",
+          "suggestion": "Use a strong, salted, adaptive hashing algorithm such as bcrypt, scrypt, or Argon2 for password storage. Increase the password column size to at least varchar(255) to accommodate modern hash outputs."
+        },
+        {
+          "line": 168,
+          "type": "insecure_password_storage",
+          "severity": "high",
+          "description": "Passwords in the 'staff' table (column 'passStaff') are stored as unsalted MD5 hashes (e.g., '21232f297a57a5a743894a0e4a801fc3' is the MD5 hash of 'admin'). Staff/admin accounts with weak MD5-hashed passwords are a critical risk as they likely grant elevated privileges to the system.",
+          "suggestion": "Use a strong, salted, adaptive hashing algorithm such as bcrypt, scrypt, or Argon2 for password storage. Increase the passStaff column size to at least varchar(255)."
+        },
+        {
+          "line": 170,
+          "type": "hardcoded_credentials",
+          "severity": "high",
+          "description": "The SQL dump contains hardcoded admin credentials in seed data. The admin account with username 'admin' has its MD5-hashed password '21232f297a57a5a743894a0e4a801fc3' which is trivially reversible to the plaintext 'admin'. This gives an attacker immediate ADMIN-level access to the application.",
+          "suggestion": "Never include real or default credentials in SQL dump files or version-controlled seed data. Use environment-specific provisioning for initial admin accounts with strong, randomly generated passwords that must be changed on first login."
+        },
+        {
+          "line": 119,
+          "type": "hardcoded_credentials",
+          "severity": "high",
+          "description": "Member password data is included in the SQL dump with crackable MD5 hashes and associated PII (names, emails, mobile numbers, addresses). If this file is committed to version control or shared, it exposes user credentials and personal information.",
+          "suggestion": "Remove all user credential data and PII from SQL dump files. Use anonymized or synthetic test data in development environments. Never commit real user data to version control."
+        },
+        {
+          "line": 108,
+          "type": "insecure_data_storage",
+          "severity": "high",
+          "description": "The 'member' table stores passwords in a varchar(45) column with no indication of salting or use of a secure hashing algorithm at the schema level. The column size (45 chars) is too small for bcrypt (60 chars) or other modern hash formats, effectively forcing the use of weak hashing algorithms like MD5 or SHA1.",
+          "suggestion": "Alter the password column to at least varchar(255) to support modern password hashing algorithms. Implement application-level password hashing with bcrypt/Argon2 with unique salts per user."
+        },
+        {
+          "line": 36,
+          "type": "race_condition",
+          "severity": "high",
+          "description": "The 'generateServiceId' function has a race condition (TOCTOU - Time of Check to Time of Use). It reads the current serviceId, then updates it in a separate statement. Without proper locking (e.g., SELECT ... FOR UPDATE), concurrent calls can read the same value before either updates it, leading to duplicate service IDs.",
+          "suggestion": "Use SELECT ... FOR UPDATE to acquire a row-level lock, or use an atomic UPDATE with a subsequent SELECT, or replace this pattern with an AUTO_INCREMENT column or a sequence to generate unique IDs safely under concurrency."
+        }
+      ],
+      "summary": "This SQL dump file contains multiple high-severity security vulnerabilities. The most critical issues are: (1) passwords for both members and staff are stored using unsalted MD5 hashing, which is cryptographically broken and easily reversible; (2) hardcoded admin credentials are present with the trivially crackable password 'admin'; (3) real user PII and credentials are embedded in the dump file, risking exposure if the file is shared or version-controlled; and (4) the service ID generator has a race condition that could produce duplicate IDs. Immediate remediation should focus on migrating to bcrypt/Argon2 for password hashing, removing all hardcoded credentials and real user data from dump files, and fixing the ID generation race condition."
+    },
+    {
+      "file": "Laundrysystem/checklogin.php",
+      "line_count": 47,
+      "vulnerabilities": [
+        {
+          "line": 16,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The variable $l_user is directly concatenated into the SQL query string without any sanitization or parameterization. Although $l_pass is passed through md5() which limits its character set, $l_user comes directly from user input (only trimmed) and can be manipulated to inject arbitrary SQL. An attacker can bypass authentication entirely (e.g., by submitting userName as `' OR '1'='1' -- `) or extract/modify database contents.",
+          "suggestion": "Use prepared statements with parameterized queries. Replace the raw query with: $stmt = $mysqli->prepare(\"SELECT * FROM staff WHERE userStaff = ? AND passStaff = ?\"); $stmt->bind_param('ss', $l_user, $l_pass); $stmt->execute(); $res = $stmt->get_result();"
+        },
+        {
+          "line": 8,
+          "type": "weak_hashing",
+          "severity": "high",
+          "description": "MD5 is used to hash passwords. MD5 is a cryptographically broken hash function that is extremely fast to brute-force and is vulnerable to collision attacks. It is entirely unsuitable for password storage. No salt is used either, making it trivially susceptible to rainbow table attacks.",
+          "suggestion": "Replace md5() with PHP's password_hash() function using PASSWORD_BCRYPT or PASSWORD_ARGON2ID for hashing, and password_verify() for verification during login. This provides salting and a computationally expensive hash automatically."
+        },
+        {
+          "line": 23,
+          "type": "session_fixation",
+          "severity": "high",
+          "description": "After successful authentication, the session ID is not regenerated. The session was started before authentication (line 3), and the same session ID is reused post-login. This makes the application vulnerable to session fixation attacks, where an attacker can set or predict a session ID before the victim logs in and then hijack the authenticated session.",
+          "suggestion": "Call session_regenerate_id(true) immediately after successful authentication and before setting session variables to prevent session fixation."
+        },
+        {
+          "line": 30,
+          "type": "open_redirect_header_injection",
+          "severity": "medium",
+          "description": "After setting session variables, the code issues a redirect via header('Location: management.php') but does not call exit() or die() afterwards. Any code following the header() call will continue to execute, meaning the response body could leak sensitive information or the application could perform unintended operations. While in this specific case no code follows within the same block, this is a dangerous pattern, and the same issue occurs on lines 35 and 41 where HTML output follows a Refresh header without termination.",
+          "suggestion": "Always call exit() or die() immediately after header() redirects to prevent further code execution. For example: header('Location: management.php'); exit();"
+        },
+        {
+          "line": 36,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "The error messages distinguish between blank credentials and invalid credentials, providing an attacker with slightly different feedback. More importantly, these error messages are rendered without exiting, and because session_start() was already called without proper configuration, the session cookie may be sent with insecure defaults (no HttpOnly, Secure, or SameSite flags).",
+          "suggestion": "Configure session cookie parameters before session_start() using session_set_cookie_params() with 'httponly' => true, 'secure' => true, and 'samesite' => 'Strict'. Use generic error messages like 'Login failed' for all failure cases."
+        }
+      ],
+      "summary": "This login script contains critical security vulnerabilities. The most severe is a SQL injection flaw where unsanitized user input ($l_user) is directly concatenated into a SQL query, allowing complete authentication bypass and potential database compromise. Additionally, passwords are hashed with the broken MD5 algorithm without salting, making stored passwords trivially recoverable. The session management lacks session ID regeneration after login (session fixation risk), and redirect headers are not followed by exit() calls, allowing continued code execution. Immediate remediation should prioritize switching to prepared statements, adopting password_hash()/password_verify(), and fixing session handling."
+    },
+    {
+      "file": "Laundrysystem/connect.php",
+      "line_count": 6,
+      "vulnerabilities": [
+        {
+          "line": 2,
+          "type": "hardcoded_credentials",
+          "severity": "high",
+          "description": "Database credentials (username 'xwn', password '111222333', database 'bbn', host '127.0.0.1') are hardcoded directly in the source code. If this file is committed to version control (e.g., Git), these credentials are exposed to anyone with repository access. Attackers who gain read access to the source code (via directory traversal, misconfigured web server, or repository leak) will immediately obtain valid database credentials.",
+          "suggestion": "Move database credentials to environment variables or a configuration file stored outside the web root and excluded from version control (e.g., via .gitignore). Use getenv() or a .env file with a library like phpdotenv. Example: $mysqli = new mysqli(getenv('DB_HOST'), getenv('DB_USER'), getenv('DB_PASS'), getenv('DB_NAME'));"
+        },
+        {
+          "line": 4,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "Database connection error details (including errno and error message) are echoed directly to the user. This can reveal sensitive internal information such as the database server address, database name, driver version, and the nature of the connection failure, aiding attackers in reconnaissance.",
+          "suggestion": "Log connection errors to a server-side log file instead of displaying them to the end user. In production, show a generic error message. Example: error_log('DB connection failed: ' . $mysqli->connect_errno . ': ' . $mysqli->connect_error); echo 'A system error occurred. Please try again later.';"
+        },
+        {
+          "line": 2,
+          "type": "weak_password",
+          "severity": "high",
+          "description": "The database password '111222333' is a simple numeric sequence that is easily guessable and susceptible to brute-force or dictionary attacks. If the database port is exposed (even unintentionally), this weak password provides minimal protection.",
+          "suggestion": "Use a strong, randomly generated password with a mix of uppercase and lowercase letters, numbers, and special characters (minimum 16 characters). Store it securely using environment variables or a secrets management system (e.g., HashiCorp Vault, AWS Secrets Manager)."
+        }
+      ],
+      "summary": "This database connection file contains multiple high-severity security issues. Hardcoded database credentials with a weak password are present in the source code, and connection errors are displayed directly to users, exposing internal system details. All three issues should be remediated immediately: credentials should be externalized and strengthened, and error messages should be logged server-side rather than displayed to end users."
+    },
+    {
+      "file": "Laundrysystem/regisitem.php",
+      "line_count": 141,
+      "vulnerabilities": [
+        {
+          "line": 50,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database values from the 'item' table (itemName, price) are output directly into HTML attributes and content without any escaping or sanitization. If an attacker can control item names or prices in the database (e.g., via a separate SQL injection or admin panel), they can inject arbitrary HTML/JavaScript. The shorthand <?=$row['itemName']?> and <?=$row['price']?> echo raw data into id attributes, name attributes, label content, and for attributes across lines 50-55.",
+          "suggestion": "Use htmlspecialchars($row['itemName'], ENT_QUOTES, 'UTF-8') and htmlspecialchars($row['price'], ENT_QUOTES, 'UTF-8') everywhere these values are rendered in HTML context."
+        },
+        {
+          "line": 90,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The dynamically generated JavaScript block on lines 90-97 embeds $JSCheckBoxArray and $JSTexyInputArray values (derived from unsanitized database 'itemName' values) directly into JavaScript string literals and script tags without escaping. A malicious itemName containing a single quote or </script> tag can break out of the string context and inject arbitrary JavaScript, leading to stored XSS.",
+          "suggestion": "Use json_encode() to safely embed PHP values into JavaScript strings, or use htmlspecialchars() combined with proper JavaScript escaping. For example: json_encode($JSCheckBoxArray[$i], JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_QUOT)."
+        },
+        {
+          "line": 42,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "On line 42, when the SQL query fails, the raw MySQL error message is displayed to the user via $mysqli->error. This can reveal database schema information, table names, and other internal details that aid an attacker in crafting further attacks.",
+          "suggestion": "Log database errors to a server-side log file instead of displaying them to the user. Show a generic error message to the end user."
+        },
+        {
+          "line": 3,
+          "type": "session_misconfiguration",
+          "severity": "medium",
+          "description": "session_start() is called on line 3 after require_once('connect.php') on line 1. If connect.php produces any output (even whitespace), headers may already be sent, potentially causing session handling failures. Additionally, there is no session fixation protection (session_regenerate_id) and no CSRF token on the form, which could allow cross-site request forgery attacks on the item registration action.",
+          "suggestion": "Call session_start() before any output or includes that may produce output. Implement CSRF tokens in the form and validate them on form submission. Use session_regenerate_id() after authentication."
+        }
+      ],
+      "summary": "This file contains multiple high-confidence security vulnerabilities. The most critical are Stored Cross-Site Scripting (XSS) issues: database-sourced values (itemName, price) are rendered into HTML and JavaScript without any encoding or escaping, both in HTML element attributes/content (lines 50-55) and in dynamically generated <script> blocks (lines 90-97). Additionally, raw database error messages are exposed to users, leaking internal information. The form also lacks CSRF protection. All database-derived output must be properly escaped for its output context (HTML, JavaScript, or attribute)."
+    },
+    {
+      "file": "Laundrysystem/viewdetail.php",
+      "line_count": 131,
+      "vulnerabilities": [
+        {
+          "line": 4,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The `serviceId` parameter is taken directly from `$_GET['serviceId']` without any sanitization or parameterization and is interpolated directly into the SQL query on line 48. An attacker can manipulate the `serviceId` URL parameter to inject arbitrary SQL commands, potentially reading, modifying, or deleting the entire database.",
+          "suggestion": "Use prepared statements with parameterized queries. Replace the direct string interpolation with `$stmt = $mysqli->prepare(\"SELECT *, firstName, lastName, itemName FROM regisitem, member, item WHERE serviceId = ? AND regisitem.memberId = member.memberId AND regisitem.itemId = item.itemId ORDER BY serviceId\"); $stmt->bind_param('s', $serviceId); $stmt->execute();`"
+        },
+        {
+          "line": 48,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The SQL query directly concatenates the unsanitized `$serviceId` variable: `WHERE serviceId = '$serviceId'`. This is the injection point where attacker-controlled input enters the SQL statement, enabling classic SQL injection attacks such as `' OR '1'='1' --` or UNION-based data exfiltration.",
+          "suggestion": "Use MySQLi prepared statements with bound parameters instead of string interpolation to prevent SQL injection."
+        },
+        {
+          "line": 51,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "When the SQL query fails, the raw database error message is echoed to the user via `$mysqli->error`. This leaks internal database structure, table names, column names, and MySQL version information to attackers, which greatly aids in crafting further SQL injection attacks.",
+          "suggestion": "Log detailed error messages server-side using `error_log()` and display only a generic error message to the user, such as 'An error occurred. Please try again later.'"
+        },
+        {
+          "line": 56,
+          "type": "xss",
+          "severity": "high",
+          "description": "Database values are output directly into the HTML using shorthand echo tags (`<?=$row[3]?>`, `<?=$row[2]?>`, `<?=$row[1]?>`, `<?=$row[7]?>`, `<?=$row[8]?>`, `<?=$row[18]?>`, `<?=$row[5]?>`) without any HTML encoding. If any database field contains attacker-controlled data (e.g., member names, item names), this enables stored Cross-Site Scripting (XSS) attacks that can steal session cookies, redirect users, or perform actions on their behalf.",
+          "suggestion": "Wrap all output values with `htmlspecialchars()` using the `ENT_QUOTES` flag, e.g., `<?=htmlspecialchars($row[3], ENT_QUOTES, 'UTF-8')?>`. Apply this to every dynamically rendered value."
+        },
+        {
+          "line": 3,
+          "type": "session_misconfiguration",
+          "severity": "medium",
+          "description": "`session_start()` is called after `require_once('connect.php')` which may already produce output. More importantly, the page does not perform any session-based authentication or authorization check — any unauthenticated user can access service details by guessing or enumerating `serviceId` values, leading to unauthorized information disclosure (IDOR).",
+          "suggestion": "Add authentication and authorization checks to verify the logged-in user is permitted to view the requested `serviceId`. Redirect unauthenticated users to the login page."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a SQL injection vulnerability where user-supplied input from `$_GET['serviceId']` is directly interpolated into a SQL query without any sanitization or parameterization, allowing full database compromise. Additionally, stored XSS vulnerabilities exist due to unescaped database output, sensitive database error messages are leaked to users, and there are no authentication or authorization controls protecting access to service detail records (IDOR). Immediate remediation with prepared statements, output encoding, proper error handling, and access controls is strongly recommended."
+    },
+    {
+      "file": "Laundrysystem/viewdetailforuser.php",
+      "line_count": 131,
+      "vulnerabilities": [
+        {
+          "line": 4,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The 'serviceId' parameter is taken directly from $_GET without any sanitization or parameterization and is interpolated into the SQL query on line 48. An attacker can manipulate the 'serviceId' URL parameter to inject arbitrary SQL commands, potentially reading, modifying, or deleting the entire database.",
+          "suggestion": "Use prepared statements with parameterized queries. Replace the raw string interpolation with: $stmt = $mysqli->prepare(\"SELECT *, firstName, lastName, itemName FROM regisitem, member, item WHERE serviceId = ? AND regisitem.memberId = member.memberId AND regisitem.itemId = item.itemId ORDER BY serviceId\"); $stmt->bind_param('s', $serviceId); $stmt->execute(); $result = $stmt->get_result();"
+        },
+        {
+          "line": 48,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL query fails, the raw MySQL error message is echoed to the user via $mysqli->error. This can reveal internal database structure, table names, column names, and other sensitive information to an attacker, aiding further exploitation (e.g., refining SQL injection payloads).",
+          "suggestion": "Log database errors to a server-side log file instead of displaying them to the user. Show a generic error message to the end user, e.g., 'An error occurred. Please try again later.'"
+        },
+        {
+          "line": 57,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database values are rendered directly into HTML using shorthand echo tags (<?=$row[3]?>, <?=$row[7]?>, <?=$row[8]?>, <?=$row[18]?>, etc.) without any output encoding. If an attacker has injected malicious scripts into the database (stored XSS) via another input vector, or through the SQL injection vulnerability, JavaScript could be executed in the browsers of users viewing this page.",
+          "suggestion": "Apply htmlspecialchars() with ENT_QUOTES and UTF-8 encoding to all output, e.g., <?=htmlspecialchars($row[3], ENT_QUOTES, 'UTF-8')?>. This should be done for every database value rendered in HTML."
+        },
+        {
+          "line": 3,
+          "type": "session_management",
+          "severity": "medium",
+          "description": "session_start() is called but there is no authentication or authorization check. The page does not verify whether the user is logged in or whether they are authorized to view the requested serviceId. Any unauthenticated user can access any service record by guessing or enumerating serviceId values (Insecure Direct Object Reference / IDOR).",
+          "suggestion": "Add authentication checks to verify the user is logged in, and authorization checks to ensure the user is permitted to view the specific serviceId they are requesting. For example, verify that the serviceId belongs to the currently logged-in user's session."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a SQL injection vulnerability where unsanitized user input from $_GET['serviceId'] is directly interpolated into a SQL query, allowing full database compromise. Additionally, database output is rendered without HTML encoding (stored XSS risk), database error messages are exposed to users (information disclosure), and there are no authentication or authorization checks, allowing any user to view any service record (IDOR). Immediate remediation with prepared statements, output encoding, proper error handling, and access controls is strongly recommended."
+    },
+    {
+      "file": "Laundrysystem/delstaffinfo.php",
+      "line_count": 18,
+      "vulnerabilities": [
+        {
+          "line": 4,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The 'userid' parameter from $_GET is directly interpolated into the SQL DELETE query on line 6 without any sanitization, escaping, or use of prepared statements. An attacker can craft a malicious 'userid' value to execute arbitrary SQL commands, potentially deleting all records, extracting data, or compromising the entire database. The strtolower() call on line 7 provides no security benefit whatsoever.",
+          "suggestion": "Use parameterized prepared statements. Replace the direct interpolation with: $stmt = $mysqli->prepare('DELETE FROM staff WHERE staffId = ?'); $stmt->bind_param('i', $id); $stmt->execute(); This ensures the user input is treated as data, not executable SQL."
+        },
+        {
+          "line": 4,
+          "type": "insecure_direct_object_reference",
+          "severity": "high",
+          "description": "There is no authentication or authorization check before performing the DELETE operation. Any unauthenticated user who knows (or guesses) a staff ID can delete staff records by simply visiting the URL with the appropriate 'userid' parameter. This is an Insecure Direct Object Reference (IDOR) vulnerability.",
+          "suggestion": "Implement proper session-based authentication and authorization checks before executing the delete operation. Verify that the logged-in user has administrative privileges to delete staff records."
+        },
+        {
+          "line": 4,
+          "type": "csrf",
+          "severity": "high",
+          "description": "The delete operation is triggered via a GET request with no CSRF token validation. An attacker can trick an authenticated admin into clicking a link (e.g., embedded in an email or external page) like 'delstaffinfo.php?userid=1' to delete arbitrary staff records without the admin's knowledge or consent. Destructive operations should never be performed via GET requests.",
+          "suggestion": "Change the delete operation to require a POST request with a valid CSRF token. Generate a unique token per session, embed it in the delete form, and validate it server-side before executing the deletion."
+        },
+        {
+          "line": 9,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the DELETE query fails, the raw MySQL error message is echoed to the user via $mysqli->error. This can leak sensitive information about the database schema, table structure, and query syntax, which aids attackers in refining SQL injection attacks.",
+          "suggestion": "Log detailed database errors server-side using error_log() and display only a generic, user-friendly error message to the client."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a classic SQL injection via unsanitized GET parameter directly embedded in a DELETE query, allowing full database compromise. Additionally, there are no authentication/authorization checks (IDOR), no CSRF protection, and the destructive action is performed via a GET request. The file also leaks database error details to users. This file requires immediate remediation before deployment."
+    },
+    {
+      "file": "Laundrysystem/searchguest.php",
+      "line_count": 146,
+      "vulnerabilities": [
+        {
+          "line": 57,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "User-supplied input from $_POST['searchServiceId'] is directly interpolated into the SQL query string without any sanitization, parameterization, or escaping. An attacker can craft a malicious 'searchServiceId' value to manipulate the SQL query, potentially extracting, modifying, or deleting data from the entire database, or even achieving remote code execution depending on database configuration.",
+          "suggestion": "Use prepared statements with parameterized queries. Replace the raw query with: $stmt = $mysqli->prepare('SELECT * FROM `laundryservice` WHERE `serviceId` = ? ORDER BY `serviceId`'); $stmt->bind_param('s', $serachId); $stmt->execute(); $result = $stmt->get_result();"
+        },
+        {
+          "line": 68,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $row['serviceId'] is output directly into the HTML using <?=$row['serviceId']?> without any escaping. If an attacker has injected malicious data into the database (second-order XSS) via SQL injection or other means, this value could contain JavaScript that executes in the browser of any user viewing this page.",
+          "suggestion": "Use htmlspecialchars() to escape all output: <?=htmlspecialchars($row['serviceId'], ENT_QUOTES, 'UTF-8')?>"
+        },
+        {
+          "line": 69,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $row['staffId'] is output directly into the HTML without escaping, making it vulnerable to stored/second-order XSS attacks.",
+          "suggestion": "Use htmlspecialchars() to escape all output: <?=htmlspecialchars($row['staffId'], ENT_QUOTES, 'UTF-8')?>"
+        },
+        {
+          "line": 70,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $row['memberId'] is output directly into the HTML without escaping, making it vulnerable to stored/second-order XSS attacks.",
+          "suggestion": "Use htmlspecialchars() to escape all output: <?=htmlspecialchars($row['memberId'], ENT_QUOTES, 'UTF-8')?>"
+        },
+        {
+          "line": 74,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $row['totalPrice'] is output directly into the HTML without escaping, making it vulnerable to stored/second-order XSS attacks.",
+          "suggestion": "Use htmlspecialchars() to escape all output: <?=htmlspecialchars($row['totalPrice'], ENT_QUOTES, 'UTF-8')?>"
+        },
+        {
+          "line": 75,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $row['serviceId'] is output directly into an href attribute without URL encoding or HTML escaping, allowing potential XSS or URL manipulation via stored malicious data.",
+          "suggestion": "Use urlencode() for the URL parameter and htmlspecialchars() for the HTML attribute context: href='viewdetailforuser.php?serviceId=<?=htmlspecialchars(urlencode($row['serviceId']), ENT_QUOTES, 'UTF-8')?>'"
+        },
+        {
+          "line": 59,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL query fails, the detailed database error message ($mysqli->error) is displayed directly to the user. This can leak sensitive information about the database structure, table names, and query syntax to an attacker, aiding further exploitation.",
+          "suggestion": "Log the detailed error server-side and display a generic error message to the user. For example: error_log('SQL Error: ' . $mysqli->error); echo 'An error occurred. Please try again later.';"
+        },
+        {
+          "line": 3,
+          "type": "missing_authentication",
+          "severity": "high",
+          "description": "There is no session validation or authentication check before processing the search request. The commented-out session check on line 38 suggests authentication was intended but is disabled. Any unauthenticated user can search and view laundry service records, including staff IDs, member IDs, and pricing information.",
+          "suggestion": "Uncomment and properly implement the session-based authentication check. Use session_start() and verify $_SESSION['userStatus'] before allowing access to the page. Redirect unauthenticated users to the login page."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a SQL injection vulnerability where unsanitized user input from $_POST['searchServiceId'] is directly concatenated into a SQL query, allowing an attacker to fully compromise the database. Additionally, multiple stored XSS vulnerabilities exist where database values are output without HTML escaping. Authentication is commented out, leaving the page accessible to unauthenticated users. Database error messages are exposed to end users, leaking internal system details. Immediate remediation with prepared statements, output encoding, proper authentication, and error handling is strongly recommended."
+    },
+    {
+      "file": "Laundrysystem/modmemberinfo.php",
+      "line_count": 117,
+      "vulnerabilities": [
+        {
+          "line": 30,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The 'userid' parameter from $_GET is directly concatenated into the SQL query without any sanitization or parameterization. An attacker can inject arbitrary SQL code via the 'userid' URL parameter (e.g., ?userid=1 OR 1=1) to read, modify, or delete data from the database, or potentially execute administrative operations.",
+          "suggestion": "Use prepared statements with parameterized queries. Replace the query with: $stmt = $mysqli->prepare('SELECT * FROM member WHERE memberId = ?'); $stmt->bind_param('i', $userid); $stmt->execute(); $result = $stmt->get_result();"
+        },
+        {
+          "line": 44,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $urow['firstName'] is output directly into an HTML attribute using <?=$urow['firstName']?> without escaping. If the database contains malicious content (e.g., via second-order XSS or prior SQL injection), an attacker can inject arbitrary JavaScript that executes in other users' browsers.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES when outputting any data into HTML: value=\"<?=htmlspecialchars($urow['firstName'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 47,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $urow['lastName'] is output directly into an HTML attribute without escaping, allowing stored/reflected XSS attacks.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES: value=\"<?=htmlspecialchars($urow['lastName'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 57,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $urow['mobileNo'] is output directly into an HTML attribute without escaping, allowing stored XSS attacks.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES: value=\"<?=htmlspecialchars($urow['mobileNo'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 60,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $urow['address'] is output directly into an HTML attribute without escaping, allowing stored XSS attacks.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES: value=\"<?=htmlspecialchars($urow['address'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 66,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $urow['bonusPoint'] is output directly into an HTML attribute without escaping, allowing stored XSS attacks.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES: value=\"<?=htmlspecialchars($urow['bonusPoint'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 69,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The value of $urow['email'] is output directly into an HTML attribute without escaping, allowing stored XSS attacks.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES: value=\"<?=htmlspecialchars($urow['email'], ENT_QUOTES, 'UTF-8')?>\"."
+        },
+        {
+          "line": 33,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL query fails, the internal database error message ($mysqli->error) is displayed directly to the user. This can reveal database schema details, table names, and other sensitive information to an attacker.",
+          "suggestion": "Log detailed error messages server-side and show a generic error message to the user. For example: error_log('Query failed: ' . $mysqli->error); echo 'An error occurred. Please try again later.';"
+        },
+        {
+          "line": 29,
+          "type": "broken_access_control",
+          "severity": "high",
+          "description": "There is no authentication or authorization check before accessing member data. Any unauthenticated user can view and modify any member's personal information by simply changing the 'userid' parameter in the URL (Insecure Direct Object Reference - IDOR).",
+          "suggestion": "Implement session-based authentication and verify that the logged-in user has permission to view/modify the requested member's data before processing the request."
+        }
+      ],
+      "summary": "This file contains multiple critical security vulnerabilities. The most severe is an SQL injection vulnerability where user-supplied input from the URL is directly concatenated into an SQL query. Additionally, all database values are output into HTML without escaping, creating numerous stored XSS vulnerabilities. There is no authentication or authorization, enabling any user to access or modify any member's data via IDOR. Internal database errors are also exposed to end users. Immediate remediation is required: use prepared statements, escape all output with htmlspecialchars(), implement proper access controls, and suppress detailed error messages."
+    },
+    {
+      "file": "Laundrysystem/userregister.php",
+      "line_count": 108,
+      "vulnerabilities": [
+        {
+          "line": 33,
+          "type": "missing_csrf_protection",
+          "severity": "high",
+          "description": "The registration form submits via POST to 'userfinishregister.php' without any CSRF (Cross-Site Request Forgery) token. An attacker can craft a malicious page that auto-submits this form, creating rogue user accounts on behalf of unsuspecting visitors. This can be used for mass account creation, spam, or privilege abuse.",
+          "suggestion": "Generate a unique, unpredictable CSRF token per session and include it as a hidden field in the form. Validate the token server-side in 'userfinishregister.php' before processing the registration."
+        },
+        {
+          "line": 33,
+          "type": "insecure_form_submission",
+          "severity": "high",
+          "description": "The form action points to 'userfinishregister.php' using a relative URL with method POST, but there is no indication that HTTPS is enforced. User credentials (userId, password) are transmitted in the form. If served over HTTP, these credentials are sent in plaintext and are vulnerable to interception via man-in-the-middle attacks.",
+          "suggestion": "Enforce HTTPS across the entire application. Use HSTS headers and ensure all form actions use secure transport. Redirect all HTTP traffic to HTTPS."
+        },
+        {
+          "line": 62,
+          "type": "missing_input_validation",
+          "severity": "high",
+          "description": "The password field has no client-side or apparent server-side complexity requirements, minimum length enforcement, or strength validation. Combined with the lack of any visible server-side validation contract, this allows users to register with extremely weak passwords (e.g., '1', empty string), making accounts trivially brute-forceable.",
+          "suggestion": "Implement both client-side (HTML5 pattern/minlength attributes) and server-side password policy enforcement requiring minimum length (e.g., 8+ characters), complexity, and rejection of common passwords."
+        },
+        {
+          "line": 37,
+          "type": "potential_xss_via_form_processing",
+          "severity": "high",
+          "description": "All form input fields (firstName, lastName, mobileNo, address, email, userId) accept arbitrary text with no client-side sanitization or validation constraints. While this file is only the HTML form, the data is submitted to 'userfinishregister.php' where, if not properly sanitized/escaped, it will lead to Stored XSS vulnerabilities when these values are later displayed (e.g., in admin panels or user profiles). The lack of any input constraints here increases the attack surface significantly.",
+          "suggestion": "Add client-side input validation (maxlength, pattern attributes, proper input types like 'email' for email fields, 'tel' for phone). Most critically, ensure 'userfinishregister.php' performs strict server-side input validation, parameterized queries, and output encoding when storing and displaying user data."
+        }
+      ],
+      "summary": "This is a user registration HTML form that submits sensitive data (credentials, PII) to a server-side PHP handler. The file contains several high-confidence security issues: no CSRF protection on the form, no enforcement of HTTPS for credential transmission, no input validation or constraints on any fields (increasing risk of XSS/injection in the backend handler), and no password strength requirements. While the most critical exploitation depends on the server-side implementation in 'userfinishregister.php', the complete absence of defensive measures in this form represents a significant security gap in a defense-in-depth strategy."
+    },
+    {
+      "file": "Laundrysystem/userchecklogin.php",
+      "line_count": 70,
+      "vulnerabilities": [
+        {
+          "line": 21,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The variable $l_user is directly concatenated into the SQL query without any sanitization or parameterization. User-supplied input from $_POST['userId'] is only trimmed before being inserted into the query string. An attacker can inject arbitrary SQL (e.g., ' OR '1'='1' --) to bypass authentication or extract data. Although $l_pass is passed through md5() which neutralizes injection for that parameter, $l_user is fully exploitable.",
+          "suggestion": "Use prepared statements with parameterized queries. Replace the raw query with: $stmt = $mysqli->prepare('SELECT * FROM member WHERE memberUserId = ? AND password = ?'); $stmt->bind_param('ss', $l_user, $l_pass); $stmt->execute();"
+        },
+        {
+          "line": 35,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The variable $mTypeId is sourced from a database row result and directly concatenated into a second SQL query without parameterization. While this is a second-order SQL injection (the value comes from the database rather than directly from user input), if an attacker can control the memberTypeId value stored in the database (e.g., via the first SQL injection or another input vector), they can exploit this query as well.",
+          "suggestion": "Use prepared statements: $stmt2 = $mysqli->prepare('SELECT m_TypeName FROM m_Type WHERE m_TypeId = ?'); $stmt2->bind_param('s', $mTypeId); $stmt2->execute();"
+        },
+        {
+          "line": 8,
+          "type": "weak_hashing",
+          "severity": "high",
+          "description": "MD5 is used to hash passwords. MD5 is cryptographically broken and unsuitable for password hashing. It is extremely fast, making it vulnerable to brute-force and rainbow table attacks. Additionally, no salt is used, meaning identical passwords produce identical hashes.",
+          "suggestion": "Use password_hash() with PASSWORD_BCRYPT or PASSWORD_ARGON2ID for hashing passwords, and password_verify() for verification. This provides automatic salting and a computationally expensive hash function resistant to brute-force attacks."
+        },
+        {
+          "line": 27,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "The code uses echo 'string' and var_dump($row) to output debug information including the full database row to the user's browser. This exposes sensitive user data (potentially password hashes, internal IDs, and other fields) to anyone who logs in, and indicates debug code left in production.",
+          "suggestion": "Remove all debug output statements (echo 'string' and var_dump($row)) before deploying to production."
+        },
+        {
+          "line": 40,
+          "type": "session_fixation",
+          "severity": "medium",
+          "description": "After successful authentication, the session ID is not regenerated. An attacker who can set or predict the session ID before authentication (via session fixation) can hijack the authenticated session. session_start() is called at the top but session_regenerate_id() is never called upon successful login.",
+          "suggestion": "Call session_regenerate_id(true) immediately after successful authentication, before setting any session variables."
+        },
+        {
+          "line": 39,
+          "type": "header_injection",
+          "severity": "medium",
+          "description": "After the header('Location: usermanagement.php') redirect on successful login, execution is not terminated with exit() or die(). The code continues executing, and any output after the header (such as the var_dump and subsequent logic) is still processed. Similarly, the error-path headers on lines 47 and 52 output HTML content after a redirect header without terminating, which could lead to unintended code execution or information leakage.",
+          "suggestion": "Add exit(); or die(); immediately after every header() redirect call to prevent further code execution."
+        }
+      ],
+      "summary": "This authentication script contains critical security vulnerabilities. The most severe is a SQL injection in the login query via the $l_user parameter, which allows complete authentication bypass and potential database compromise. Passwords are hashed with the insecure MD5 algorithm without salting. Debug output (var_dump) exposes sensitive database contents in production. The code also lacks session regeneration after login (session fixation risk) and fails to terminate script execution after header redirects. Immediate remediation should prioritize switching to prepared statements and replacing MD5 with password_hash()/password_verify()."
+    },
+    {
+      "file": "Laundrysystem/usermanagement.php",
+      "line_count": 147,
+      "vulnerabilities": [
+        {
+          "line": 42,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Session variables 'userFirstName', 'userLastName', 'memberType', and 'bonusPoint' are echoed directly into HTML output without any sanitization or encoding. If any of these session values were set from unsanitized user input during registration or login (which is highly likely given the overall code quality), an attacker could inject malicious JavaScript that executes in other users' browsers. This is a Stored XSS vulnerability.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES and UTF-8 encoding when outputting any session data: htmlspecialchars($_SESSION['userFirstName'], ENT_QUOTES, 'UTF-8'). Apply this to all four session variables being echoed."
+        },
+        {
+          "line": 1,
+          "type": "session_misconfiguration",
+          "severity": "high",
+          "description": "session_start() is called on line 3 without any secure session configuration. There are no settings for session.cookie_httponly, session.cookie_secure, session.use_strict_mode, or session.cookie_samesite. This makes session cookies vulnerable to theft via XSS (especially dangerous given the XSS vulnerability on line 42), session fixation attacks, and man-in-the-middle interception.",
+          "suggestion": "Before session_start(), configure secure session settings: ini_set('session.cookie_httponly', 1); ini_set('session.cookie_secure', 1); ini_set('session.use_strict_mode', 1); ini_set('session.cookie_samesite', 'Strict'); Also call session_regenerate_id(true) after successful login to prevent session fixation."
+        },
+        {
+          "line": 30,
+          "type": "broken_access_control",
+          "severity": "high",
+          "description": "The commented-out code on line 29 shows that the original intent was to check for STAFF or ADMIN status (userStatus check), but this authorization check was removed or disabled. Now the page only checks if 'memberUserId' is set in the session. The page is named 'usermanagement.php' which implies administrative functionality, yet there is no role-based access control enforced. Any authenticated user can access this management page.",
+          "suggestion": "Restore and enforce proper role-based access control. Uncomment and properly implement the userStatus check to ensure only authorized roles (STAFF, ADMIN) can access management functionality. Redirect unauthorized users with an appropriate error message."
+        }
+      ],
+      "summary": "This file contains multiple high-confidence security vulnerabilities. The most critical is a Stored Cross-Site Scripting (XSS) vulnerability where session variables containing user-supplied data are echoed directly into HTML without encoding. Combined with insecure session configuration (no HttpOnly/Secure flags), this creates a high risk of session hijacking. Additionally, a commented-out authorization check suggests broken access control on what appears to be a management page. No SQL injection was found in this particular file as it performs no database queries directly, but the lack of output encoding and access controls represent significant security risks."
+    },
+    {
+      "file": "Laundrysystem/checkoutitems.php",
+      "line_count": 136,
+      "vulnerabilities": [
+        {
+          "line": 57,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "When the SQL query fails, the raw database error message is displayed to the user via `$mysqli->error`. This can reveal internal database structure, table names, column names, and database version information to an attacker, aiding further exploitation.",
+          "suggestion": "Log the error server-side using `error_log()` and display a generic error message to the user. Never expose `$mysqli->error` in production output."
+        },
+        {
+          "line": 72,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database values such as `$row['serviceId']`, `$row['staffId']`, `$row['memberId']`, `$row['firstName']`, `$row['lastName']`, `$row['dateIn']`, `$row['dateOut']`, and `$row['totalPrice']` are output directly into HTML using `<?= ?>` shorthand without any escaping via `htmlspecialchars()`. If any of these database fields contain malicious scripts (stored XSS), they will execute in the user's browser.",
+          "suggestion": "Wrap all output in `htmlspecialchars($value, ENT_QUOTES, 'UTF-8')` before rendering into HTML. For example: `<?=htmlspecialchars($row['firstName'], ENT_QUOTES, 'UTF-8')?>`."
+        },
+        {
+          "line": 80,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The `serviceId`, `memberId`, and `totalPrice` values from the database are injected directly into the `href` attribute of an anchor tag without URL-encoding or HTML-encoding. An attacker who can control these database values could inject malicious JavaScript or break out of the attribute to execute arbitrary code (stored XSS via URL context).",
+          "suggestion": "Use `urlencode()` for values placed in URL query parameters and wrap the entire output in `htmlspecialchars()`. For example: `href=\"checkcheckout.php?serviceId=<?=htmlspecialchars(urlencode($row['serviceId']), ENT_QUOTES, 'UTF-8')?>&...\"`."
+        },
+        {
+          "line": 3,
+          "type": "session_misconfiguration",
+          "severity": "medium",
+          "description": "The page calls `session_start()` but performs no authentication or authorization check. Sensitive business data (service records, member names, staff IDs, pricing) is displayed to any unauthenticated visitor. This is an access control vulnerability.",
+          "suggestion": "Add authentication and authorization checks after `session_start()`. Redirect unauthenticated users to the login page. For example: `if (!isset($_SESSION['staff_id'])) { header('Location: staffsignin.php'); exit(); }`."
+        },
+        {
+          "line": 55,
+          "type": "sql_injection",
+          "severity": "medium",
+          "description": "While the current SQL query on line 55 is a static string with no direct user input concatenation, the implicit cross-join pattern (`FROM table1, table2 WHERE ...`) combined with the lack of prepared statements establishes a dangerous coding pattern. If any future modification introduces user input into this query, it will be immediately exploitable. Additionally, the error output on line 57 would amplify any SQL injection by revealing query details.",
+          "suggestion": "Use prepared statements with parameterized queries (`$mysqli->prepare()` with bound parameters) as a defensive practice, even for static queries, to establish secure patterns and guard against future modifications."
+        }
+      ],
+      "summary": "This file contains multiple high-confidence security vulnerabilities. The most critical are stored Cross-Site Scripting (XSS) issues where database values are rendered directly into HTML and URL contexts without any encoding or escaping. There is also information disclosure through exposed database error messages. The page lacks any authentication or authorization checks, allowing any visitor to view sensitive business data including member names, staff IDs, service records, and pricing. Immediate remediation should include applying `htmlspecialchars()` to all outputs, removing error disclosure, implementing access controls, and adopting prepared statements."
+    },
+    {
+      "file": "Laundrysystem/userfinishregister.php",
+      "line_count": 104,
+      "vulnerabilities": [
+        {
+          "line": 46,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "User-supplied values ($firstName, $lastName, $mobileNo, $address, $email, $memberUserId, $gender) are directly concatenated into the SQL INSERT query without any sanitization or parameterization. An attacker can inject arbitrary SQL commands through any of these POST parameters (e.g., firstName, lastName, email, etc.) to read, modify, or delete database contents, or potentially execute OS commands.",
+          "suggestion": "Use prepared statements with parameterized queries (e.g., $stmt = $mysqli->prepare('INSERT INTO MEMBER (...) VALUES (?,?,?,?,?,?,?,?,?,?)'); $stmt->bind_param('ssssssssss', ...);). Never concatenate user input directly into SQL strings."
+        },
+        {
+          "line": 34,
+          "type": "xss",
+          "severity": "high",
+          "description": "User-supplied POST values such as $firstName, $lastName, $email, etc. are processed and could be reflected in error messages (line 49: $mysqli->error may contain attacker-controlled input from the query). Additionally, if the INSERT fails partway, reflected content from user input may appear in the page context. The lack of output encoding across the file makes reflected XSS possible.",
+          "suggestion": "Apply htmlspecialchars() with ENT_QUOTES and UTF-8 encoding to all user-supplied data before outputting it to HTML. Also avoid exposing raw database error messages to the user."
+        },
+        {
+          "line": 49,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "When the SQL INSERT fails, the raw database error message ($mysqli->error) is echoed directly to the user. This can reveal internal database schema details (table names, column names, database type/version), aiding an attacker in further exploitation such as refining SQL injection attacks.",
+          "suggestion": "Log detailed error messages server-side and display only a generic error message to the user (e.g., 'Registration failed. Please try again later.')."
+        },
+        {
+          "line": 43,
+          "type": "weak_cryptography",
+          "severity": "high",
+          "description": "Passwords are hashed using MD5 (md5($_POST['password'])), which is cryptographically broken and unsuitable for password storage. MD5 hashes can be brute-forced or reversed via rainbow tables in seconds. No salt is used, making all identical passwords produce the same hash.",
+          "suggestion": "Use PHP's password_hash() with PASSWORD_BCRYPT or PASSWORD_ARGON2ID for password hashing, and password_verify() for verification. These functions handle salting automatically and use computationally expensive algorithms resistant to brute force."
+        },
+        {
+          "line": 51,
+          "type": "header_injection",
+          "severity": "medium",
+          "description": "The header('Refresh: ...') call is issued after HTML content has potentially already been sent (the DOCTYPE, head, and div elements are output before the PHP block). While this causes a PHP warning rather than a direct exploit, the inconsistent behavior means the redirect may not execute, leaving the page in an unexpected state and potentially exposing sensitive output.",
+          "suggestion": "Restructure the code so that all header() calls occur before any HTML output. Consider using a proper PRG (Post/Redirect/Get) pattern where form processing logic is separated from presentation."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a SQL injection flaw where multiple user inputs are directly concatenated into an INSERT query, allowing full database compromise. Passwords are stored with the broken MD5 algorithm without salting. Internal database errors are leaked to users, and there is no output encoding to prevent XSS. Immediate remediation is required: implement prepared statements, switch to password_hash()/password_verify(), suppress detailed error output, and encode all user-facing output."
+    },
+    {
+      "file": "Laundrysystem/viewhistory.php",
+      "line_count": 143,
+      "vulnerabilities": [
+        {
+          "line": 56,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database values are output directly into HTML using short echo tags (<?= ?>) without any escaping or sanitization. Fields such as serviceId, staffId, memberId, firstName, lastName, dateIn, dateOut, and totalPrice from the database are rendered directly into the page. If any of these database fields contain malicious scripts (Stored XSS), they will execute in the browsers of all users viewing this page.",
+          "suggestion": "Wrap all output in htmlspecialchars() with ENT_QUOTES flag, e.g., <?=htmlspecialchars($row['serviceId'], ENT_QUOTES, 'UTF-8')?>. Apply this to every database-sourced value rendered in the HTML."
+        },
+        {
+          "line": 53,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "When the SQL query fails, the raw MySQL error message is echoed directly to the user via $mysqli->error. This can reveal database schema details, table names, column names, and internal server configuration to attackers, aiding further exploitation.",
+          "suggestion": "Log database errors to a server-side log file instead of displaying them to the user. Show a generic error message to the end user, e.g., 'An error occurred. Please try again later.'"
+        },
+        {
+          "line": 1,
+          "type": "missing_authentication",
+          "severity": "high",
+          "description": "The page starts a session but never checks if the user is authenticated or authorized. Any unauthenticated user can access this page and view all laundry service history including member names, service details, and pricing information. This is a broken access control vulnerability leading to unauthorized data exposure.",
+          "suggestion": "Add authentication and authorization checks at the top of the page before any data is rendered. For example, verify that $_SESSION contains a valid logged-in user and that the user has the appropriate role/permissions to view this data. Redirect unauthorized users to the login page."
+        },
+        {
+          "line": 68,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The serviceId value from the database is injected directly into an href attribute without encoding: href='viewdetail.php?serviceId=<?=$row['serviceId']?>'. If serviceId contains crafted content, it could break out of the attribute and inject arbitrary HTML/JavaScript.",
+          "suggestion": "Use urlencode() for values placed in URL query parameters and htmlspecialchars() for the overall attribute value: href='viewdetail.php?serviceId=<?=htmlspecialchars(urlencode($row['serviceId']), ENT_QUOTES, 'UTF-8')?>'."
+        }
+      ],
+      "summary": "This file contains multiple high-severity vulnerabilities. The most critical issues are: (1) Stored Cross-Site Scripting (XSS) — all database values are rendered without any HTML encoding, allowing malicious content stored in the database to execute in users' browsers; (2) Information Disclosure — raw database error messages are exposed to end users; (3) Broken Access Control — no authentication or authorization checks protect this page, meaning any anonymous user can view all service history and member data. Immediate remediation is strongly recommended for all identified issues."
+    },
+    {
+      "file": "Laundrysystem/trackservice.php",
+      "line_count": 182,
+      "vulnerabilities": [
+        {
+          "line": 56,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The variable $memberId, sourced from $_SESSION['memberId'], is directly interpolated into the SQL query string without any sanitization or parameterization. While session values are less directly controllable by an attacker than GET/POST parameters, if the session value was originally set from user input without proper validation (e.g., during login or registration), this constitutes a SQL injection vulnerability. An attacker who can influence the session value (e.g., via a separate vulnerability in session assignment) could manipulate the query to extract, modify, or delete arbitrary data.",
+          "suggestion": "Use prepared statements with parameterized queries. Replace the query with: $stmt = $mysqli->prepare('SELECT * FROM `laundryservice` WHERE `memberId` = ? ORDER BY `serviceId`'); $stmt->bind_param('i', $memberId); $stmt->execute(); $result = $stmt->get_result();"
+        },
+        {
+          "line": 59,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL query fails, the internal database error message ($mysqli->error) is echoed directly to the user. This can reveal sensitive information about the database schema, table names, column names, and query structure, which aids attackers in crafting further attacks such as SQL injection.",
+          "suggestion": "Log the detailed database error server-side using error_log() and display only a generic error message to the user, such as 'An error occurred. Please try again later.'"
+        },
+        {
+          "line": 73,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database values such as $row['serviceId'], $row['staffId'], $row['memberId'], $row['dateIn'], $row['dateOut'], and $row['totalPrice'] are output directly into the HTML using <?= ?> shorthand without any escaping via htmlspecialchars(). If any of these database fields contain malicious JavaScript (stored XSS), it will be executed in the browser of any user viewing this page.",
+          "suggestion": "Wrap all output in htmlspecialchars() with ENT_QUOTES flag. For example: <?= htmlspecialchars($row['serviceId'], ENT_QUOTES, 'UTF-8') ?>. Apply this to every database value rendered in HTML."
+        },
+        {
+          "line": 80,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The serviceId value from the database is embedded directly into an href attribute without encoding: href='viewdetailforuser.php?serviceId=<?=$row['serviceId']?>'. If serviceId contains crafted content, it could break out of the attribute and inject malicious HTML or JavaScript.",
+          "suggestion": "Use urlencode() for URL parameters and htmlspecialchars() for the HTML attribute context: href='viewdetailforuser.php?serviceId=<?= htmlspecialchars(urlencode($row['serviceId']), ENT_QUOTES, 'UTF-8') ?>'."
+        },
+        {
+          "line": 37,
+          "type": "broken_access_control",
+          "severity": "medium",
+          "description": "The access control check only verifies if $_SESSION['memberUserId'] is set, but the commented-out code on line 35 suggests that a role-based check (STAFF/ADMIN) was originally intended. The current check is weak — any authenticated user with a session could potentially access the page. Additionally, there is no verification that $_SESSION['memberId'] actually belongs to the logged-in user, which could allow horizontal privilege escalation if the session is manipulated.",
+          "suggestion": "Implement proper role-based access control. Verify that the authenticated user's identity matches the memberId being used in the query. Ensure session values are set securely during authentication and cannot be tampered with."
+        }
+      ],
+      "summary": "This file contains multiple high-confidence security vulnerabilities. The most critical is a SQL injection on line 56 where a session variable is directly interpolated into a SQL query. There are also multiple stored XSS vulnerabilities where database values are rendered in HTML without escaping. Additionally, internal database errors are exposed to users, and the access control mechanism is weak with commented-out authorization checks. Immediate remediation should prioritize using prepared statements for all database queries and applying htmlspecialchars() to all user-facing output."
+    },
+    {
+      "file": "Laundrysystem/staffsignin.php",
+      "line_count": 81,
+      "vulnerabilities": [
+        {
+          "line": 33,
+          "type": "missing_csrf_protection",
+          "severity": "high",
+          "description": "The login form at line 33 submits credentials via POST to 'checklogin.php' without any CSRF token. An attacker could craft a malicious page that auto-submits a forged login request, potentially performing a login CSRF attack (forcing a victim to authenticate as the attacker's account, which can then be used to capture sensitive user activity).",
+          "suggestion": "Generate a unique CSRF token per session, include it as a hidden field in the form, and validate it server-side in 'checklogin.php' before processing the login."
+        },
+        {
+          "line": 33,
+          "type": "insecure_transport",
+          "severity": "high",
+          "description": "The form action 'checklogin.php' uses a relative URL with no enforcement of HTTPS anywhere in the page. User credentials (username and password) will be transmitted in plaintext if the site is served over HTTP, making them vulnerable to interception via man-in-the-middle attacks.",
+          "suggestion": "Enforce HTTPS across the entire application using HSTS headers, TLS configuration, and redirects from HTTP to HTTPS. Ensure the form action URL uses HTTPS."
+        },
+        {
+          "line": 36,
+          "type": "credential_exposure",
+          "severity": "high",
+          "description": "The input field for username has no autocomplete=\"off\" attribute, and more critically, the form submits credentials to 'checklogin.php' where the handling logic is unknown. Given the coding patterns observed (no security controls in this file), it is highly likely that 'checklogin.php' uses unsanitized user input directly in SQL queries, leading to SQL Injection. While the injection itself is in 'checklogin.php', this form is the direct attack vector feeding unsanitized 'userName' and 'password' values.",
+          "suggestion": "Ensure 'checklogin.php' uses parameterized/prepared statements (e.g., PDO with bound parameters) for all database queries. Validate and sanitize all input server-side. Add autocomplete=\"off\" on sensitive fields."
+        },
+        {
+          "line": 1,
+          "type": "missing_security_headers",
+          "severity": "high",
+          "description": "The page includes no security headers (Content-Security-Policy, X-Content-Type-Options, X-Frame-Options, etc.). This makes the page vulnerable to clickjacking attacks where an attacker could iframe this login page on a malicious site and trick users into entering credentials.",
+          "suggestion": "Set security headers either in PHP (using header() calls) or in the web server configuration: X-Frame-Options: DENY, Content-Security-Policy with appropriate directives, X-Content-Type-Options: nosniff, and Referrer-Policy: no-referrer."
+        }
+      ],
+      "summary": "This file is a login form page for staff/admin users. While the file itself is primarily HTML with a form, it has several high-confidence security concerns: (1) No CSRF protection on the login form, enabling login CSRF attacks. (2) No HTTPS enforcement, risking credential interception in transit. (3) The form feeds user-supplied credentials directly to 'checklogin.php' with no client-side or evident server-side input validation, strongly suggesting SQL injection risk in the backend handler given the project's overall lack of security controls. (4) No clickjacking protection or security headers. The project appears to be a student project with minimal security considerations applied."
+    },
+    {
+      "file": "Laundrysystem/usersignin.php",
+      "line_count": 83,
+      "vulnerabilities": [
+        {
+          "line": 36,
+          "type": "cross_site_scripting",
+          "severity": "medium",
+          "description": "The login form submits credentials via POST to 'userchecklogin.php'. While this file itself is a static form, there is no CSRF token included in the form. An attacker could craft a malicious page that auto-submits this form, potentially tricking a user into authenticating with attacker-controlled credentials (login CSRF), which could lead to session fixation or account manipulation.",
+          "suggestion": "Add a CSRF token (e.g., a hidden input with a server-generated random token stored in the session) to the form and validate it in 'userchecklogin.php' before processing the login."
+        },
+        {
+          "line": 36,
+          "type": "insecure_transport",
+          "severity": "medium",
+          "description": "The form action uses a relative URL ('userchecklogin.php') with no enforcement of HTTPS. User credentials (username and password) are submitted via POST, and if the page is served over HTTP, credentials will be transmitted in plaintext, making them susceptible to interception via man-in-the-middle attacks.",
+          "suggestion": "Enforce HTTPS across the entire application. Use HSTS headers and redirect all HTTP traffic to HTTPS to ensure credentials are always transmitted over an encrypted channel."
+        },
+        {
+          "line": 2,
+          "type": "information_disclosure",
+          "severity": "low",
+          "description": "The file includes 'connect.php' which likely contains database connection credentials. If 'connect.php' is misconfigured or PHP fails to execute (e.g., due to a server misconfiguration), database credentials could be exposed. Additionally, this sign-in page does not appear to need a direct database connection, suggesting unnecessary inclusion.",
+          "suggestion": "Only include 'connect.php' in files that actually need database access. This static login form page does not need a database connection. Remove the unnecessary require_once('connect.php') to reduce attack surface."
+        },
+        {
+          "line": 39,
+          "type": "brute_force",
+          "severity": "medium",
+          "description": "The login form has no visible rate limiting, account lockout mechanism, or CAPTCHA. This makes it susceptible to brute-force and credential-stuffing attacks, where an attacker can systematically try username/password combinations without restriction.",
+          "suggestion": "Implement rate limiting on login attempts (e.g., temporary lockout after N failed attempts), add CAPTCHA after a few failed attempts, and consider implementing account lockout or progressive delays in 'userchecklogin.php'."
+        },
+        {
+          "line": 38,
+          "type": "autocomplete_sensitive_data",
+          "severity": "low",
+          "description": "The password input field does not have 'autocomplete=\"off\"' or 'autocomplete=\"new-password\"' set. Browsers may cache the password, which could be extracted by an attacker with physical or malware access to the machine.",
+          "suggestion": "Add autocomplete=\"off\" to the password input field: <input type=\"password\" id=\"password\" name=\"password\" autocomplete=\"off\">."
+        }
+      ],
+      "summary": "This file is a static HTML login form with a PHP include. It does not directly contain high-severity injection vulnerabilities (such as SQL injection or XSS) since it does not process or output user input. However, it has several notable security concerns: absence of CSRF protection on the login form, no enforcement of HTTPS for credential transmission, lack of brute-force protections, and an unnecessary database connection include. The actual credential processing happens in 'userchecklogin.php', which should be reviewed separately for SQL injection, improper authentication, and session management vulnerabilities—those are the most likely locations for critical security flaws in this login flow."
+    },
+    {
+      "file": "Laundrysystem/management.php",
+      "line_count": 204,
+      "vulnerabilities": [
+        {
+          "line": 38,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Session values ($_SESSION['userFirstName'], $_SESSION['userLastName'], $_SESSION['userStatus']) are echoed directly into HTML output without any sanitization or encoding. If these session values were set from unsanitized user input during registration or login (stored XSS), an attacker could inject malicious JavaScript that executes in other users' browsers. For example, a user registering with a first name containing '<script>alert(document.cookie)</script>' would have that script rendered for any admin viewing the page.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES and UTF-8 encoding when outputting session values. For example: htmlspecialchars($_SESSION['userFirstName'], ENT_QUOTES, 'UTF-8'). Apply this to all instances where session data is echoed (lines 38, 78)."
+        },
+        {
+          "line": 78,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Same stored XSS vulnerability as line 38 — the ADMIN section also echoes $_SESSION['userFirstName'], $_SESSION['userLastName'], and $_SESSION['userStatus'] directly into HTML without any output encoding.",
+          "suggestion": "Use htmlspecialchars() with ENT_QUOTES and UTF-8 encoding on all echoed session values: echo 'Hello&nbsp;' . htmlspecialchars($_SESSION['userFirstName'], ENT_QUOTES, 'UTF-8') . '&nbsp;' . htmlspecialchars($_SESSION['userLastName'], ENT_QUOTES, 'UTF-8');"
+        },
+        {
+          "line": 3,
+          "type": "session_misconfiguration",
+          "severity": "high",
+          "description": "session_start() is called after require_once('connect.php') which may produce output (e.g., database connection messages or whitespace). Additionally, there are no secure session configuration settings applied — no HttpOnly flag, no Secure flag, no SameSite attribute on session cookies, and session_regenerate_id() is not called after privilege checks. This makes the application vulnerable to session fixation and session hijacking attacks.",
+          "suggestion": "Call session_start() before any output and configure secure session parameters: ini_set('session.cookie_httponly', 1); ini_set('session.cookie_secure', 1); ini_set('session.use_strict_mode', 1); ini_set('session.cookie_samesite', 'Strict'); Also call session_regenerate_id(true) after authentication."
+        }
+      ],
+      "summary": "The file contains high-confidence Cross-Site Scripting (XSS) vulnerabilities where session-stored user data (first name, last name, status) is output directly into HTML without encoding in two separate locations (STAFF and ADMIN views). If user input is not properly sanitized at the point of storage (registration/login), this constitutes a stored XSS vulnerability that could allow attackers to steal session cookies, perform actions on behalf of authenticated users, or redirect users to malicious sites. Additionally, the session configuration lacks security hardening, making it susceptible to session fixation and hijacking. No SQL injection or command injection vulnerabilities were identified in this specific file, as it does not process user input directly or perform database queries."
+    },
+    {
+      "file": "Laundrysystem/finishregister_copy.php",
+      "line_count": 109,
+      "vulnerabilities": [
+        {
+          "line": 49,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "User-supplied input from $_POST (firstName, lastName, citizenNumber, dateOfBirth, mobileNumber, address, email, userid, status, gender) is directly concatenated into a SQL INSERT query without any sanitization, escaping, or use of prepared statements. An attacker can inject arbitrary SQL commands through any of these form fields to read, modify, or delete data, or potentially execute system commands.",
+          "suggestion": "Use parameterized/prepared statements with bound parameters. Replace the raw query with: $stmt = $mysqli->prepare('INSERT INTO STAFF (firstName, lastName, citizenNo, dateOfBirth, mobileNo, address, email, userStaff, passStaff, status, gender) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'); $stmt->bind_param('sssssssssss', $firstName, $lastName, $citizenNumber, $dateOfBirth, $mobileNumber, $address, $email, $userid, $password, $status, $gender); $stmt->execute();"
+        },
+        {
+          "line": 48,
+          "type": "weak_cryptography",
+          "severity": "high",
+          "description": "Passwords are hashed using MD5, which is a cryptographically broken hash function. MD5 is extremely fast to compute and vulnerable to brute-force, rainbow table, and collision attacks. It provides no salt, making identical passwords produce identical hashes.",
+          "suggestion": "Replace md5() with PHP's password_hash() function using PASSWORD_BCRYPT or PASSWORD_ARGON2ID: $password = password_hash($_POST['password'], PASSWORD_BCRYPT); Use password_verify() for authentication."
+        },
+        {
+          "line": 37,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Multiple user-supplied $_POST values are processed and could be reflected back to the user via the database error message on line 52 ($mysqli->error may contain user input). Additionally, if the INSERT succeeds and the data is later displayed elsewhere without encoding, stored XSS is possible since no input sanitization or output encoding is performed on any field.",
+          "suggestion": "Apply htmlspecialchars() with ENT_QUOTES to all user input before outputting to HTML. Never display raw database error messages to end users in production; log them server-side instead."
+        },
+        {
+          "line": 52,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL query fails, the raw database error message ($mysqli->error) is displayed directly to the user. This can reveal internal database schema details, table names, column names, and other sensitive information that aids attackers in crafting further attacks.",
+          "suggestion": "Log detailed error messages server-side using error_log() and display only a generic error message to the user, e.g., 'Registration failed. Please try again later.'"
+        },
+        {
+          "line": 35,
+          "type": "insecure_direct_object_reference",
+          "severity": "high",
+          "description": "The 'status' field is accepted directly from user POST data, allowing an attacker to set their own role/privilege level (e.g., setting status to 'ADMIN' instead of 'STAFF'). This is a privilege escalation vulnerability since the user controls their own authorization level during registration.",
+          "suggestion": "Never accept privilege/role information from client-side input. Set the status server-side to a default value (e.g., 'STAFF') or validate it against an allowed whitelist with proper authorization checks."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a SQL injection vulnerability where 10+ user-controlled POST parameters are directly concatenated into an INSERT query. Passwords are hashed with the broken MD5 algorithm without salting. User-controlled input for the 'status' field enables privilege escalation. Database errors are leaked to end users, and no input validation or output encoding is performed, creating XSS risks. This file requires immediate remediation with prepared statements, modern password hashing, server-side role assignment, and proper input/output handling."
+    },
+    {
+      "file": "Laundrysystem/updatestatus.php",
+      "line_count": 136,
+      "vulnerabilities": [
+        {
+          "line": 60,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Database values are output directly into HTML using PHP short echo tags (<?= ?>) without any escaping or sanitization. Fields such as serviceId, staffId, memberId, firstName, lastName, dateIn, dateOut, and totalPrice are rendered directly from the database. If any of these values contain malicious scripts (Stored XSS), they will execute in the user's browser.",
+          "suggestion": "Wrap all output with htmlspecialchars() using ENT_QUOTES and UTF-8 encoding, e.g., <?=htmlspecialchars($row['serviceId'], ENT_QUOTES, 'UTF-8')?>. Apply this to every database-sourced value rendered in HTML."
+        },
+        {
+          "line": 55,
+          "type": "information_disclosure",
+          "severity": "high",
+          "description": "When the SQL query fails, the raw MySQL error message is echoed directly to the user via $mysqli->error. This can reveal database structure, table names, column names, and other internal details that aid attackers in crafting further attacks such as SQL injection on other endpoints.",
+          "suggestion": "Log the detailed error message server-side using error_log() and display only a generic error message to the user, e.g., 'An error occurred. Please try again later.'"
+        },
+        {
+          "line": 68,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "The serviceId value from the database is injected directly into an href attribute without encoding: href='checkupdatestatus.php?serviceId=<?=$row['serviceId']?>'. If the serviceId contains malicious content (e.g., injected via Stored XSS), an attacker could break out of the attribute and inject arbitrary HTML/JavaScript.",
+          "suggestion": "Use urlencode() for URL parameters and htmlspecialchars() for the HTML attribute context: href='checkupdatestatus.php?serviceId=<?=htmlspecialchars(urlencode($row['serviceId']), ENT_QUOTES, 'UTF-8')?>'."
+        },
+        {
+          "line": 3,
+          "type": "missing_access_control",
+          "severity": "high",
+          "description": "The page starts a session but never checks if the user is authenticated or authorized. This page displays sensitive business data (service records, member names, staff IDs, pricing) and provides links to update service status, all accessible to unauthenticated users.",
+          "suggestion": "Add authentication and authorization checks after session_start(). Redirect unauthenticated users to the login page, e.g., if (!isset($_SESSION['user_id'])) { header('Location: staffsignin.php'); exit(); }."
+        }
+      ],
+      "summary": "The file contains multiple high-severity vulnerabilities. The most critical are Stored Cross-Site Scripting (XSS) due to unescaped database output rendered directly in HTML across multiple fields, information disclosure through raw database error messages exposed to users, and a complete lack of authentication/authorization checks allowing any unauthenticated user to view sensitive business and member data. All database-derived output should be escaped with htmlspecialchars(), errors should be logged server-side only, and proper access control must be implemented."
+    },
+    {
+      "file": "Laundrysystem/staffmanagement.php",
+      "line_count": 127,
+      "vulnerabilities": [
+        {
+          "line": 75,
+          "type": "plaintext_password_exposure",
+          "severity": "high",
+          "description": "Staff passwords are displayed in plaintext in the HTML table via <?=$row['passStaff']?>. This exposes credentials to any user who can access this page, and indicates passwords are likely stored in plaintext (or reversibly encrypted) in the database rather than being properly hashed.",
+          "suggestion": "Never display passwords in any UI. Remove the password column from the table entirely. Passwords must be stored as salted hashes (e.g., using password_hash() with PASSWORD_BCRYPT) and should never be retrievable or displayable."
+        },
+        {
+          "line": 56,
+          "type": "missing_authentication",
+          "severity": "high",
+          "description": "This page displays highly sensitive staff data (citizen/national ID numbers, dates of birth, passwords, contact information) but has no authentication or authorization check. Any unauthenticated user can access this page directly by navigating to the URL, resulting in a complete data breach of all staff records.",
+          "suggestion": "Implement session-based authentication and authorization checks at the top of the file. Verify the user is logged in and has an appropriate admin/manager role before allowing access. Redirect unauthorized users to a login page."
+        },
+        {
+          "line": 69,
+          "type": "sensitive_data_exposure",
+          "severity": "high",
+          "description": "Citizen/national identification numbers (citizenNo), dates of birth, and other PII are displayed in the HTML table without any access control. This constitutes exposure of personally identifiable information (PII) that could be used for identity theft.",
+          "suggestion": "Restrict access to this page with proper authentication/authorization. Mask or redact sensitive fields like citizen numbers (e.g., show only last 4 digits). Apply the principle of least privilege — only show data necessary for the user's role."
+        },
+        {
+          "line": 63,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "All database values are output directly into the HTML using short echo tags (<?=$row[...]?>) without any output encoding or escaping. If any database field contains malicious HTML or JavaScript (e.g., a staff member's name was set to '<script>...</script>'), it will execute in the browser of anyone viewing this page (Stored XSS).",
+          "suggestion": "Use htmlspecialchars($row['fieldName'], ENT_QUOTES, 'UTF-8') for every value output into HTML context. Consider using a templating engine that auto-escapes output by default."
+        },
+        {
+          "line": 77,
+          "type": "insecure_direct_object_reference",
+          "severity": "high",
+          "description": "The delete and modify links pass the staffId directly as a GET parameter (e.g., delstaffinfo.php?userid=<?=$row['staffId']?>). Without CSRF protection or proper authorization checks on the target pages, an attacker could craft URLs to modify or delete arbitrary staff records. Deletion via GET request is also vulnerable to CSRF attacks through image tags or link prefetching.",
+          "suggestion": "Use POST requests with CSRF tokens for state-changing operations like delete and modify. Implement proper authorization checks on the target pages. Never perform destructive actions via GET requests."
+        },
+        {
+          "line": 59,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL query fails, the raw database error message is echoed to the user via $mysqli->error. This can reveal database schema details, table names, and other internal information useful to an attacker.",
+          "suggestion": "Log detailed error messages server-side and display only a generic error message to the user. Use error_log() for server-side logging."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe issues are: (1) plaintext password storage and display, (2) complete lack of authentication/authorization allowing any visitor to access all staff PII, (3) stored XSS via unescaped database output, and (4) CSRF-vulnerable delete/modify operations via GET requests. This page effectively constitutes an open data breach of all staff records including national ID numbers, passwords, and personal information. Immediate remediation is required — implement authentication, remove password display, hash stored passwords, escape all output, and add CSRF protection to state-changing operations."
+    },
+    {
+      "file": "Laundrysystem/checkupdatestatus.php",
+      "line_count": 17,
+      "vulnerabilities": [
+        {
+          "line": 3,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The `$serviceId` parameter is taken directly from `$_GET['serviceId']` and concatenated into the SQL query on line 8 without any sanitization, validation, or use of prepared statements. An attacker can inject arbitrary SQL by manipulating the `serviceId` query parameter, potentially allowing them to modify or delete data, extract sensitive information, or compromise the entire database.",
+          "suggestion": "Use parameterized prepared statements instead of string concatenation. For example: `$stmt = $mysqli->prepare('UPDATE laundryservice SET serviceStatus=\\'F\\' WHERE serviceId = ?'); $stmt->bind_param('i', $serviceId); $stmt->execute();`. Additionally, validate that `$serviceId` is a valid integer using `intval()` or `filter_input(INPUT_GET, 'serviceId', FILTER_VALIDATE_INT)` as a defense-in-depth measure."
+        },
+        {
+          "line": 12,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL query fails, the internal database error message (`$mysqli->error`) is echoed directly to the user. This can leak sensitive information about the database schema, table names, column names, and query structure, which aids attackers in crafting more targeted SQL injection attacks.",
+          "suggestion": "Log detailed database errors to a server-side log file and display a generic error message to the user, e.g., `echo 'An error occurred. Please try again later.';`. Use `error_log()` to record the detailed error for debugging purposes."
+        },
+        {
+          "line": 3,
+          "type": "missing_input_validation",
+          "severity": "medium",
+          "description": "There is no check to verify that the `serviceId` GET parameter exists before using it. If the parameter is missing, this will generate a PHP notice/warning and may cause unexpected behavior in the SQL query. There is also no authentication or authorization check, meaning any unauthenticated user can update any laundry service status by simply crafting a URL with any `serviceId`.",
+          "suggestion": "Add input existence checks using `isset($_GET['serviceId'])`, validate the input type, and implement authentication and authorization checks to ensure only authorized users can update service statuses."
+        }
+      ],
+      "summary": "This file contains a critical SQL injection vulnerability where user-supplied input from a GET parameter is directly concatenated into an SQL UPDATE query without any sanitization or parameterization. This is trivially exploitable and could lead to full database compromise. Additionally, database error messages are leaked to the user, and there are no authentication/authorization controls protecting this state-changing operation. Immediate remediation with prepared statements and access controls is strongly recommended."
+    },
+    {
+      "file": "Laundrysystem/checkregisitem.php",
+      "line_count": 172,
+      "vulnerabilities": [
+        {
+          "line": 48,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "User-supplied input `$_POST['memberIdInput']` is directly concatenated into a SQL SELECT query without any sanitization or parameterization. An attacker with ADMIN or STAFF session status can inject arbitrary SQL via the `memberIdInput` POST parameter to read, modify, or delete database data.",
+          "suggestion": "Use prepared statements with parameterized queries: `$stmt = $mysqli->prepare('SELECT * FROM member WHERE memberId = ?'); $stmt->bind_param('s', $memberIdToRegis); $stmt->execute();`"
+        },
+        {
+          "line": 93,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "User-supplied input `$memberIdToRegis` (from `$_POST['memberIdInput']`) and `$itemQuantity` (from dynamically constructed POST parameter names) are directly interpolated into an INSERT SQL query string without sanitization or parameterization. This allows SQL injection through either the member ID or the quantity fields.",
+          "suggestion": "Use prepared statements: `$stmt = $mysqli->prepare('INSERT INTO regisitem (memberId, staffId, serviceId, itemId, quantity) VALUES (?, ?, ?, ?, ?)'); $stmt->bind_param('ssssi', $memberIdToRegis, $staffId, $servideId, $itemId, $itemQuantity);`"
+        },
+        {
+          "line": 102,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "Same SQL injection vulnerability as line 93 but in the `else` branch. User-supplied `$memberIdToRegis` and `$itemQuantity` are directly interpolated into the INSERT query for the `regisitem` table.",
+          "suggestion": "Use prepared statements with bound parameters instead of string interpolation for all INSERT queries."
+        },
+        {
+          "line": 122,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "User-supplied `$memberIdToRegis` and calculated `$totalPrice` (derived from user-controlled quantity values multiplied by database prices) are directly interpolated into an INSERT query for the `laundryservice` table. The `$memberIdToRegis` value originates from `$_POST['memberIdInput']` and is unsanitized, enabling SQL injection.",
+          "suggestion": "Use prepared statements: `$stmt = $mysqli->prepare('INSERT INTO laundryservice (serviceId, memberId, staffId, dateIn, dateOut, serviceStatus, totalPrice) VALUES (?, ?, ?, ?, ?, ?, ?)'); $stmt->bind_param('ssssssd', ...);`"
+        },
+        {
+          "line": 10,
+          "type": "xss",
+          "severity": "high",
+          "description": "User-supplied values `$_POST['useMember']` and `$_POST['memberIdInput']` are directly echoed to the page without HTML encoding, enabling reflected Cross-Site Scripting (XSS). An attacker could inject malicious JavaScript that executes in the context of an authenticated ADMIN/STAFF session.",
+          "suggestion": "Use `htmlspecialchars($useMember, ENT_QUOTES, 'UTF-8')` and `htmlspecialchars($memberIdToRegis, ENT_QUOTES, 'UTF-8')` before echoing user input."
+        },
+        {
+          "line": 34,
+          "type": "xss",
+          "severity": "medium",
+          "description": "Dynamically constructed POST parameter values (`$_POST[($row['itemName'].'Vol')]`) are stored and later echoed (lines 86-91) without HTML encoding. If item names in the database combined with user input create injectable content, this could lead to stored or reflected XSS.",
+          "suggestion": "Apply `htmlspecialchars()` to all values before outputting them to HTML, and validate that quantity inputs are integers using `intval()` or `filter_input()`."
+        },
+        {
+          "line": 3,
+          "type": "session_management",
+          "severity": "medium",
+          "description": "`session_start()` is called after `require_once('connect.php')`, and there is no CSRF token validation on the form submission. An attacker could craft a malicious page that submits the form on behalf of an authenticated ADMIN/STAFF user, registering fraudulent laundry items.",
+          "suggestion": "Implement CSRF token validation by generating a token on form render and verifying it upon submission. Also ensure `session_start()` is called before any session-dependent logic."
+        }
+      ],
+      "summary": "This file contains multiple critical SQL injection vulnerabilities where user-supplied POST data is directly concatenated into SQL queries across SELECT and INSERT statements. It also contains reflected XSS vulnerabilities where user input is echoed without encoding. There is no CSRF protection on the form. The most urgent fix is to convert all SQL queries to use prepared statements with parameterized queries, apply output encoding on all user-controlled data, and add CSRF token validation."
+    },
+    {
+      "file": "Laundrysystem/checkcheckout.php",
+      "line_count": 63,
+      "vulnerabilities": [
+        {
+          "line": 3,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The `$serviceId` parameter is taken directly from `$_GET['serviceId']` without any sanitization or parameterization and is interpolated into SQL queries on lines 49 and 43. An attacker can inject arbitrary SQL via the `serviceId` GET parameter.",
+          "suggestion": "Use prepared statements with parameterized queries (e.g., `$stmt = $mysqli->prepare('UPDATE laundryservice SET dateOut=? WHERE serviceId=?'); $stmt->bind_param('si', $currentDate, $serviceId);`) instead of directly interpolating user input into SQL strings."
+        },
+        {
+          "line": 4,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The `$memberId` parameter is taken directly from `$_GET['memberId']` without any sanitization and is interpolated into SQL queries on lines 26 and 43. An attacker can craft a malicious `memberId` value to perform SQL injection, extracting or modifying database data.",
+          "suggestion": "Use prepared statements with bound parameters. For example: `$stmt = $mysqli->prepare('SELECT * FROM member WHERE memberId = ?'); $stmt->bind_param('s', $memberId);`"
+        },
+        {
+          "line": 5,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The `$totalPrice` parameter is taken directly from `$_GET['totalPrice']` without sanitization. While it is processed through `intval()` on line 38 when added to `$currentBonusPoint`, the resulting `$currentBonusPoint` is then interpolated into the UPDATE query on line 43, and `$totalPrice` itself is user-controlled, potentially allowing manipulation of bonus points and member type.",
+          "suggestion": "Validate that `$totalPrice` is a numeric value using `is_numeric()` or cast it to an integer immediately upon receipt. Use prepared statements for all queries."
+        },
+        {
+          "line": 43,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The UPDATE query on the `member` table directly interpolates `$currentBonusPoint`, `$currentM_Type`, and `$memberId` into the SQL string. The `$memberId` value is directly from user input, making this a clear SQL injection vector.",
+          "suggestion": "Use a prepared statement: `$stmt = $mysqli->prepare('UPDATE member SET bonusPoint=?, memberTypeId=? WHERE memberId=?'); $stmt->bind_param('iii', $currentBonusPoint, $currentM_Type, $memberId);`"
+        },
+        {
+          "line": 49,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "The UPDATE query on `laundryservice` directly interpolates `$currentDate` and `$serviceId` into the SQL string. While `$currentDate` comes from the database, `$serviceId` comes directly from `$_GET` with no sanitization, enabling SQL injection.",
+          "suggestion": "Use a prepared statement: `$stmt = $mysqli->prepare('UPDATE laundryservice SET dateOut=? WHERE serviceId=?'); $stmt->bind_param('si', $currentDate, $serviceId);`"
+        },
+        {
+          "line": 3,
+          "type": "missing_input_validation",
+          "severity": "high",
+          "description": "No input validation is performed on any of the three GET parameters (`serviceId`, `memberId`, `totalPrice`). There are no checks for existence, type, or expected format. Missing parameters will generate PHP notices/warnings, and malformed values can lead to unexpected behavior.",
+          "suggestion": "Validate all input parameters: check they exist with `isset()`, validate types (e.g., `ctype_digit()` or `filter_input()` with `FILTER_VALIDATE_INT`), and reject invalid input before processing."
+        },
+        {
+          "line": 52,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "Database error messages are echoed directly to the user via `$mysqli->error` on lines 45 and 52. This can reveal internal database structure, table names, and query details to an attacker.",
+          "suggestion": "Log database errors to a server-side log file instead of displaying them to the user. Show a generic error message to the end user."
+        },
+        {
+          "line": 3,
+          "type": "insecure_http_method",
+          "severity": "medium",
+          "description": "This script performs state-changing operations (database UPDATE queries) using GET parameters. GET requests can be triggered via CSRF attacks through image tags, links, or other means, and GET parameters are logged in browser history, server logs, and referrer headers.",
+          "suggestion": "Use POST method for state-changing operations and implement CSRF token validation to prevent cross-site request forgery attacks."
+        }
+      ],
+      "summary": "This file contains critical SQL injection vulnerabilities across multiple queries where user-supplied GET parameters are directly interpolated into SQL strings without any sanitization or use of prepared statements. All three user inputs (`serviceId`, `memberId`, `totalPrice`) are unsanitized. Additionally, the file uses GET for state-changing operations (vulnerable to CSRF), lacks input validation, and leaks database error information to end users. Immediate remediation with prepared statements, input validation, CSRF protection, and proper error handling is strongly recommended."
+    },
+    {
+      "file": "Laundrysystem/finishregister.php",
+      "line_count": 109,
+      "vulnerabilities": [
+        {
+          "line": 49,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "User-supplied POST parameters ($firstName, $lastName, $citizenNumber, $dateOfBirth, $mobileNumber, $address, $email, $userid, $password, $status, $gender) are directly interpolated into the SQL INSERT query string without any sanitization or parameterization. An attacker can inject arbitrary SQL commands through any of these form fields to read, modify, or delete database contents, or potentially execute OS commands.",
+          "suggestion": "Use prepared statements with parameterized queries via $mysqli->prepare() and bind_param(). For example: $stmt = $mysqli->prepare('INSERT INTO STAFF (firstName, lastName, citizenNo, dateOfBirth, mobileNo, address, email, userStaff, passStaff, status, gender) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)'); $stmt->bind_param('sssssssssss', $firstName, $lastName, $citizenNumber, $dateOfBirth, $mobileNumber, $address, $email, $userid, $password, $status, $gender); $stmt->execute();"
+        },
+        {
+          "line": 40,
+          "type": "cross_site_scripting",
+          "severity": "high",
+          "description": "Multiple user-supplied POST values are processed and potentially reflected in the page output. When the INSERT fails (line 52), the error message from $mysqli->error may contain fragments of user input. Additionally, if any part of the page rendering reflects these values, they are not HTML-encoded, allowing stored or reflected XSS attacks.",
+          "suggestion": "Always use htmlspecialchars() with ENT_QUOTES flag when outputting any user-controlled data or database error messages to the browser. For example: echo 'INSERT failed. Error: ' . htmlspecialchars($mysqli->error, ENT_QUOTES, 'UTF-8');"
+        },
+        {
+          "line": 48,
+          "type": "weak_cryptography",
+          "severity": "high",
+          "description": "The password is hashed using MD5 (md5($_POST['password'])), which is a cryptographically broken hash function. MD5 is fast to compute and vulnerable to collision attacks, rainbow table attacks, and brute-force attacks. It provides no salt, meaning identical passwords produce identical hashes.",
+          "suggestion": "Replace md5() with password_hash($password, PASSWORD_BCRYPT) or password_hash($password, PASSWORD_ARGON2ID) for secure password storage, and use password_verify() for authentication."
+        },
+        {
+          "line": 52,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL INSERT fails, the raw database error message ($mysqli->error) is displayed directly to the user. This can reveal internal database structure, table names, column names, and other sensitive information useful for further attacks.",
+          "suggestion": "Log detailed error messages server-side and display only a generic error message to the user. For example: error_log('DB Error: ' . $mysqli->error); echo 'Registration failed. Please try again later.';"
+        },
+        {
+          "line": 34,
+          "type": "missing_csrf_protection",
+          "severity": "high",
+          "description": "The form submission handler does not validate a CSRF token. An attacker can craft a malicious page that submits a forged POST request to this endpoint, creating unauthorized staff accounts with attacker-controlled credentials, effectively granting unauthorized access to the system.",
+          "suggestion": "Implement CSRF token validation by generating a unique token per session, embedding it in the registration form as a hidden field, and verifying it on the server side before processing the form submission."
+        },
+        {
+          "line": 34,
+          "type": "missing_authentication",
+          "severity": "high",
+          "description": "The staff registration endpoint has no authentication or authorization checks. Any unauthenticated user can register new staff accounts, including accounts with elevated status/roles by manipulating the 'status' POST parameter, which is directly taken from user input.",
+          "suggestion": "Restrict access to the registration endpoint to authenticated administrators only. Validate and whitelist the 'status' field server-side to prevent privilege escalation. Implement session-based authentication checks before processing the registration."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a SQL injection vulnerability where all user inputs are directly concatenated into an INSERT query. Combined with XSS risks, MD5 password hashing, information disclosure via database errors, no CSRF protection, and no authentication/authorization on a staff registration endpoint (with user-controlled role assignment), this file is highly insecure and should not be used in production. The entire registration flow needs to be rewritten using prepared statements, proper password hashing, input validation, output encoding, CSRF tokens, and access controls."
+    },
+    {
+      "file": "Laundrysystem/modify.php",
+      "line_count": 24,
+      "vulnerabilities": [
+        {
+          "line": 14,
+          "type": "sql_injection",
+          "severity": "critical",
+          "description": "All user-supplied POST parameters ($firstName, $lastName, $citizenNo, $dateOfBirth, $mobileNumber, $address, $email, $gender, $staffId) are directly concatenated into the SQL UPDATE query without any sanitization, escaping, or use of prepared statements. An attacker can inject arbitrary SQL commands via any of these fields to read, modify, or delete data, or potentially execute operating system commands.",
+          "suggestion": "Use parameterized queries (prepared statements) with bound parameters via $mysqli->prepare() and bind_param(). For example: $stmt = $mysqli->prepare('UPDATE staff SET firstName=?, lastName=?, citizenNo=?, dateOfBirth=?, mobileNo=?, address=?, email=?, gender=? WHERE staffId=?'); $stmt->bind_param('ssssssssi', $firstName, $lastName, $citizenNo, $dateOfBirth, $mobileNumber, $address, $email, $gender, $staffId);"
+        },
+        {
+          "line": 13,
+          "type": "xss",
+          "severity": "high",
+          "description": "The $staffId variable (sourced directly from $_POST) is echoed directly to the page output without any encoding or sanitization. An attacker can craft a malicious POST request containing JavaScript in the staffId field, resulting in reflected Cross-Site Scripting (XSS).",
+          "suggestion": "Use htmlspecialchars($staffId, ENT_QUOTES, 'UTF-8') before echoing any user-supplied data to the browser. Better yet, remove debug echo statements from production code."
+        },
+        {
+          "line": 16,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "When the SQL query fails, the raw database error message ($mysqli->error) is echoed to the user. This can reveal internal database schema details, table names, column names, and database version information, aiding an attacker in crafting further attacks.",
+          "suggestion": "Log detailed database errors server-side using error_log() and display only a generic error message to the user, such as 'An error occurred. Please try again later.'"
+        },
+        {
+          "line": 2,
+          "type": "missing_input_validation",
+          "severity": "high",
+          "description": "No input validation or type checking is performed on any of the POST parameters. There is no verification that required fields are present, that $staffId is an integer, that $email is a valid email, or that $dateOfBirth is a valid date. This broadens the attack surface for injection attacks and can lead to data integrity issues.",
+          "suggestion": "Validate and sanitize all inputs: use filter_var() for email validation, intval() or ctype_digit() for staffId, and appropriate regex or date parsing for dateOfBirth and mobileNumber. Reject requests with missing or invalid data."
+        },
+        {
+          "line": 1,
+          "type": "missing_csrf_protection",
+          "severity": "high",
+          "description": "The script processes a state-changing POST request (database UPDATE) without any CSRF token validation. An attacker can craft a malicious page that submits a forged POST request on behalf of an authenticated user, modifying staff records without their knowledge.",
+          "suggestion": "Implement CSRF protection by generating a unique token per session, embedding it in forms as a hidden field, and validating it server-side before processing any state-changing requests."
+        },
+        {
+          "line": 1,
+          "type": "missing_authentication",
+          "severity": "high",
+          "description": "The script does not verify whether the requesting user is authenticated or authorized to modify staff records. Any unauthenticated user who can reach this endpoint can modify arbitrary staff data.",
+          "suggestion": "Add session-based authentication and authorization checks at the top of the script to ensure only authorized users (e.g., administrators) can perform staff record modifications."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a classic SQL injection flaw where nine user-controlled POST parameters are directly concatenated into an UPDATE SQL query without any sanitization or prepared statements. Additionally, the file has reflected XSS via unsanitized echo output, information disclosure through raw database error messages, no CSRF protection, no authentication/authorization checks, and no input validation. This file requires immediate remediation — primarily converting to prepared statements with bound parameters and adding authentication, authorization, CSRF protection, and input validation."
+    },
+    {
+      "file": "Laundrysystem/notuse/log.php",
+      "line_count": 189,
+      "vulnerabilities": [
+        {
+          "line": 96,
+          "type": "missing_csrf_protection",
+          "severity": "high",
+          "description": "The login form submits credentials via POST to 'checklogin.php' without any CSRF token. An attacker can craft a malicious page that auto-submits this form, potentially tricking an authenticated user into logging into an attacker-controlled account (login CSRF) or performing other cross-site request forgery attacks.",
+          "suggestion": "Generate a unique CSRF token per session, include it as a hidden field in the form, and validate it server-side in checklogin.php before processing the login."
+        },
+        {
+          "line": 99,
+          "type": "missing_input_validation",
+          "severity": "high",
+          "description": "The username input field has no client-side length restriction or validation (no maxlength attribute, no pattern). While server-side validation is what ultimately matters, the form submits raw user input to 'checklogin.php'. If checklogin.php does not properly sanitize/parameterize this input, it is highly susceptible to SQL injection. The absence of any visible protection in this form increases the likelihood of injection in the receiving endpoint.",
+          "suggestion": "Add maxlength attributes to input fields and, critically, ensure that checklogin.php uses parameterized queries (prepared statements) rather than concatenating user input into SQL queries."
+        },
+        {
+          "line": 96,
+          "type": "insecure_form_submission",
+          "severity": "high",
+          "description": "The login form action points to 'checklogin.php' using a relative URL with no indication of HTTPS enforcement. Combined with the page loading resources over plain HTTP (e.g., line 16: 'http://fonts.googleapis.com/css?...'), credentials (username and password) may be transmitted in plaintext over an unencrypted connection, allowing man-in-the-middle attackers to intercept them.",
+          "suggestion": "Enforce HTTPS across the entire application. Use HSTS headers, redirect all HTTP traffic to HTTPS, and load all external resources over HTTPS."
+        },
+        {
+          "line": 16,
+          "type": "mixed_content",
+          "severity": "medium",
+          "description": "Google Fonts is loaded over plain HTTP ('http://fonts.googleapis.com/...') instead of HTTPS. This allows a man-in-the-middle attacker to inject malicious CSS or JavaScript, potentially enabling content spoofing, credential phishing via UI manipulation, or script injection if the response is tampered with.",
+          "suggestion": "Change the URL to use HTTPS: 'https://fonts.googleapis.com/css?family=Hind:300,400,500,600,700'."
+        },
+        {
+          "line": 148,
+          "type": "sensitive_data_exposure",
+          "severity": "high",
+          "description": "A Google Maps API key ('AIzaSyBsXUGTFS09pLVdsYEE9YrO2y4IAncAO2U') is hardcoded directly in the HTML source. This key is exposed to all visitors and can be abused by attackers to make API calls at the owner's expense, potentially leading to significant financial charges or quota exhaustion.",
+          "suggestion": "Restrict the API key in the Google Cloud Console to specific HTTP referrers, IP addresses, and APIs. Consider proxying map requests through your own backend to avoid exposing the key directly in client-side code."
+        },
+        {
+          "line": 96,
+          "type": "missing_autocomplete_attribute",
+          "severity": "medium",
+          "description": "The login form and password input field lack 'autocomplete' attributes. Browsers may cache the password, which can be a risk on shared or public computers.",
+          "suggestion": "Add 'autocomplete=\"off\"' to the form or 'autocomplete=\"current-password\"' to the password field to control browser caching behavior of credentials."
+        }
+      ],
+      "summary": "This login page presents several high-confidence security concerns. The most critical issues are: (1) credentials are likely transmitted over unencrypted HTTP given the use of plain HTTP for external resources, (2) the login form lacks CSRF protection, (3) there is no visible input validation, making the downstream checklogin.php highly susceptible to SQL injection if it doesn't use parameterized queries, and (4) a Google Maps API key is hardcoded and publicly exposed. The file is in a 'notuse' directory which suggests it may be deprecated, but if accessible via the web server it still poses an active security risk and should be removed or access-restricted."
+    },
+    {
+      "file": "Laundrysystem/modifymember.php",
+      "line_count": 24,
+      "vulnerabilities": [
+        {
+          "line": 14,
+          "type": "sql_injection",
+          "severity": "high",
+          "description": "All user-supplied POST parameters (firstName, lastName, gender, mobileNumber, address, memberTypeId, bonusPoint, email, memberId) are directly concatenated into the SQL UPDATE query without any sanitization or parameterization. An attacker can inject arbitrary SQL via any of these fields to read, modify, or delete data, or potentially execute system commands. The 'memberId' field in the WHERE clause is especially dangerous as it is not even enclosed in quotes, making injection trivial.",
+          "suggestion": "Use prepared statements with parameterized queries via mysqli::prepare() and bind_param(). For example: $stmt = $mysqli->prepare('UPDATE member SET firstName=?, lastName=?, mobileNo=?, address=?, memberTypeId=?, bonusPoint=?, email=?, gender=? WHERE memberId=?'); $stmt->bind_param('ssssisssi', $firstName, $lastName, $mobileNumber, $address, $memberTypeId, $bonusPoint, $email, $gender, $memberId); $stmt->execute();"
+        },
+        {
+          "line": 3,
+          "type": "missing_input_validation",
+          "severity": "high",
+          "description": "No input validation or type checking is performed on any of the POST parameters. Fields like memberId, memberTypeId, and bonusPoint should be validated as integers, mobileNumber should be validated as a phone number, and email should be validated as an email address. Missing validation enables SQL injection, data corruption, and business logic abuse.",
+          "suggestion": "Validate and sanitize all inputs before use. Use filter_input() with appropriate filters: e.g., filter_input(INPUT_POST, 'memberId', FILTER_VALIDATE_INT) for integer fields, filter_input(INPUT_POST, 'email', FILTER_VALIDATE_EMAIL) for email, and apply regex validation for phone numbers. Reject requests with invalid data."
+        },
+        {
+          "line": 16,
+          "type": "information_disclosure",
+          "severity": "medium",
+          "description": "The error handler on line 18 echoes the raw database error message ($mysqli->error) to the user. This can leak sensitive information about the database schema, table names, column names, and SQL syntax, which aids attackers in crafting SQL injection payloads.",
+          "suggestion": "Log detailed error messages server-side using error_log() and display only a generic error message to the user, such as 'An error occurred. Please try again later.'"
+        },
+        {
+          "line": 3,
+          "type": "missing_csrf_protection",
+          "severity": "high",
+          "description": "The endpoint directly processes POST data to modify a member record without any CSRF token validation. An attacker can craft a malicious page that submits a forged POST request to this endpoint, causing the victim's browser to modify member data without their knowledge or consent.",
+          "suggestion": "Implement CSRF protection by generating a unique token per session, embedding it in the form as a hidden field, and validating it on the server side before processing the request."
+        },
+        {
+          "line": 3,
+          "type": "missing_authentication_authorization",
+          "severity": "high",
+          "description": "There is no authentication or authorization check before performing the member update operation. Any unauthenticated user can send a POST request to this endpoint and modify any member's data by supplying an arbitrary memberId.",
+          "suggestion": "Add session-based authentication checks at the top of the file to verify the user is logged in and has the appropriate permissions to modify member records. Verify that the authenticated user is authorized to modify the specific memberId being targeted."
+        }
+      ],
+      "summary": "This file contains critical security vulnerabilities. The most severe is a direct SQL injection vulnerability where nine user-controlled POST parameters are concatenated into an UPDATE query without any sanitization or prepared statements. This allows complete database compromise. Additionally, the file lacks authentication, authorization, CSRF protection, input validation, and leaks database error details to end users. Immediate remediation is required — at minimum, switch to prepared statements and add authentication/authorization checks."
+    },
+    {
+      "file": "Laundrysystem/staffregister.php",
+      "line_count": 118,
+      "vulnerabilities": [
+        {
+          "line": 36,
+          "type": "missing_csrf_protection",
+          "severity": "high",
+          "description": "The registration form submits sensitive data (including admin/staff role selection, citizen number, password) via POST to 'finishregister.php' without any CSRF token. An attacker can craft a malicious page that auto-submits this form, creating rogue admin or staff accounts without the user's knowledge.",
+          "suggestion": "Implement CSRF protection by generating a unique token per session, embedding it as a hidden field in the form, and validating it server-side in 'finishregister.php' before processing the registration."
+        },
+        {
+          "line": 38,
+          "type": "insecure_direct_object_reference / privilege_escalation",
+          "severity": "high",
+          "description": "The user can freely select their role as 'ADMIN' or 'STAFF' via a client-side dropdown with no server-side authorization check or access control on this registration page. Any unauthenticated user can register themselves as an ADMIN, leading to full privilege escalation. There is no authentication gate preventing arbitrary visitors from accessing this page and creating admin accounts.",
+          "suggestion": "Remove the ability for users to self-select privileged roles. Admin account creation should only be allowed by an existing authenticated admin. At minimum, enforce server-side authorization checks in 'finishregister.php' to prevent unauthorized privilege assignment, and restrict access to this registration page to authenticated administrators only."
+        },
+        {
+          "line": 53,
+          "type": "sensitive_data_exposure",
+          "severity": "high",
+          "description": "The form collects highly sensitive Personally Identifiable Information (citizen/national ID number) and transmits it to the server. If 'connect.php' or the server does not enforce HTTPS, this data is transmitted in plaintext. Additionally, there is no indication that citizen numbers are encrypted at rest. Exposure of national ID numbers constitutes a severe privacy breach.",
+          "suggestion": "Enforce HTTPS (TLS) across the entire application. Encrypt sensitive PII such as citizen numbers at rest in the database. Consider whether collecting the full citizen ID number is truly necessary, and if so, mask the input and limit display of this value throughout the application."
+        },
+        {
+          "line": 68,
+          "type": "insufficient_password_policy",
+          "severity": "medium",
+          "description": "The password field has no client-side or apparent server-side complexity requirements (minimum length, character requirements). Weak passwords can be easily brute-forced, especially for admin accounts which this form can create.",
+          "suggestion": "Enforce strong password policies both client-side (HTML5 pattern attribute, JavaScript validation) and server-side (minimum length of 12+ characters, complexity requirements). Ensure passwords are hashed with a strong algorithm like bcrypt in 'finishregister.php'."
+        },
+        {
+          "line": 36,
+          "type": "missing_input_validation",
+          "severity": "medium",
+          "description": "None of the form inputs have any client-side validation constraints (no 'required' attributes, no 'maxlength', no 'pattern' attributes). While server-side validation is paramount, the complete absence of any constraints increases the likelihood that malformed or malicious data reaches the server-side handler 'finishregister.php', which may itself lack proper validation and be vulnerable to SQL injection or XSS.",
+          "suggestion": "Add 'required' attributes to all mandatory fields, enforce 'maxlength' constraints, use appropriate 'pattern' attributes for fields like citizen number and mobile number, and ensure robust server-side validation and parameterized queries in 'finishregister.php'."
+        }
+      ],
+      "summary": "This registration page contains critical security issues. The most severe is that any unauthenticated visitor can register an ADMIN account by simply selecting 'Admin' from the dropdown, representing a complete privilege escalation vulnerability. The form also lacks CSRF protection, allowing attackers to forge registration requests. Sensitive PII (citizen/national ID numbers) is collected without apparent transport or storage encryption safeguards. While the form itself is a static HTML page, its design enables dangerous attack vectors against the server-side handler 'finishregister.php'. Immediate remediation should focus on restricting admin registration to authorized users and adding CSRF tokens."
+    },
+    {
+      "file": "Laundrysystem/notuse/signin.php",
+      "line_count": 86,
+      "vulnerabilities": [
+        {
+          "line": 36,
+          "type": "insecure_form_submission",
+          "severity": "high",
+          "description": "The form's action attribute is empty (action=\"\"), which means it submits to the same page. However, the form uses the default GET method, causing sensitive credentials (email and password) to be transmitted as URL query parameters. This exposes credentials in browser history, server logs, referrer headers, and any intermediary proxy logs.",
+          "suggestion": "Set the form method to POST (method=\"POST\") and specify an explicit server-side action endpoint that handles authentication securely. Additionally, ensure the form is served over HTTPS."
+        },
+        {
+          "line": 36,
+          "type": "missing_csrf_protection",
+          "severity": "high",
+          "description": "The sign-in form does not include any CSRF (Cross-Site Request Forgery) token. An attacker could craft a malicious page that auto-submits this form, potentially tricking authenticated users or abusing the login endpoint (login CSRF attacks where an attacker logs the victim into the attacker's account).",
+          "suggestion": "Implement CSRF protection by generating a unique, unpredictable token on the server side, embedding it as a hidden field in the form, and validating it upon submission."
+        },
+        {
+          "line": 44,
+          "type": "credential_exposure",
+          "severity": "high",
+          "description": "The password field is submitted via the default GET method, meaning the password will appear in the URL as a plaintext query parameter (e.g., ?password=secret). This is visible in browser address bars, stored in browser history, logged in web server access logs, and leaked via the Referer header to any external resources loaded on the resulting page.",
+          "suggestion": "Change the form method to POST to ensure credentials are sent in the request body rather than the URL. Enforce HTTPS to encrypt credentials in transit."
+        },
+        {
+          "line": 36,
+          "type": "missing_transport_security",
+          "severity": "high",
+          "description": "There is no indication that HTTPS is enforced for this login page. Submitting credentials (email and password) over an unencrypted HTTP connection allows network attackers to intercept them via man-in-the-middle attacks.",
+          "suggestion": "Enforce HTTPS for the entire application, especially authentication pages. Implement HSTS (HTTP Strict-Transport-Security) headers and redirect all HTTP requests to HTTPS."
+        }
+      ],
+      "summary": "This is a static HTML sign-in form with several high-severity security issues. The most critical problem is that the form uses the default GET method, causing email and password credentials to be exposed in URL query parameters, browser history, and server logs. The form also lacks CSRF protection and shows no evidence of HTTPS enforcement. While the file itself does not contain server-side processing code (no SQL queries or direct output of user input), the design of the form introduces significant credential exposure risks. The form should be changed to use POST method, served exclusively over HTTPS, and enhanced with CSRF tokens."
+    }
+  ],
+  "overall_risk_assessment": "CRITICAL - Immediate action required"
+}
